@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using Amazon.CloudWatchLogs;
 using Amazon.CloudWatchLogs.Model;
 using Polly;
-using System.Threading;
+using System.Collections.Concurrent;
 using System.Threading.Tasks;
 
 namespace NLog.Targets.CloudWatchLogs
@@ -21,6 +21,7 @@ namespace NLog.Targets.CloudWatchLogs
         private int _retries = 5;
         private int _backoffBaseInSeconds = 2;
         private Task _currentTask;
+        private static ConcurrentDictionary<string, string> _tokens = new ConcurrentDictionary<string, string>();
 
         public CloudWatchLogsClientWrapper(IAmazonCloudWatchLogs client, string logGroupName, string logStreamName)
         {
@@ -30,6 +31,12 @@ namespace NLog.Targets.CloudWatchLogs
 
             Init();
         }
+
+        /// <summary>
+        /// Gets token key for the current log group and stream.
+        /// </summary>
+        /// <returns>The token key string.</returns>
+        private string GetTokenKey() => $"{_logGroupName}:{_logStreamName}";
 
         /// <summary>
         /// Initializes the CloudWatch Logs group and stream.
@@ -42,6 +49,8 @@ namespace NLog.Targets.CloudWatchLogs
                 .WaitAndRetryAsync(_retries, retryCount => TimeSpan.FromSeconds(Math.Pow(_backoffBaseInSeconds, retryCount)))
                 .ExecuteAsync(async () =>
                 {
+                    string nextToken = null;
+
                     // We check if the log group exists and create if it doesn't.
                     var logGroupsResponse = await _client.DescribeLogGroupsAsync(new DescribeLogGroupsRequest { LogGroupNamePrefix = _logGroupName });
                     if (!logGroupsResponse.Verify(nameof(_client.DescribeLogGroupsAsync)).LogGroups.Any(lg => lg.LogGroupName == _logGroupName))
@@ -55,7 +64,9 @@ namespace NLog.Targets.CloudWatchLogs
                         (await _client.CreateLogStreamAsync(new CreateLogStreamRequest { LogStreamName = _logStreamName, LogGroupName = _logGroupName }))
                             .Verify(nameof(_client.CreateLogStreamAsync));
                     else
-                        _sequenceToken = stream.UploadSequenceToken;
+                        nextToken = stream.UploadSequenceToken;
+
+                    _tokens.AddOrUpdate(GetTokenKey(), nextToken, (k,ov) => nextToken);
                 }, false);
         }
 

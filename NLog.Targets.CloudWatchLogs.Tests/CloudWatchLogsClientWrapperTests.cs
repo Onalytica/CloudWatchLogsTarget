@@ -9,6 +9,7 @@ using Amazon.CloudWatchLogs.Model;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Net;
+using System.Collections.Concurrent;
 
 namespace NLog.Targets.CloudWatchLogs.Tests
 {
@@ -213,6 +214,52 @@ namespace NLog.Targets.CloudWatchLogs.Tests
 
             // assert
             Assert.IsTrue(expected.SequenceEqual(actual), "Actual events sequence should be ordered chronologically.");
+        }
+
+        [TestMethod]
+        public async Task WriteAsync_Should_Handle_Concurent_Requests_From_Multiple_Target_Insances()
+        {
+            // arange
+            var group = "same-group";
+            var stream = "same-stream";
+            var fixture = FixtureHelpers.Init();
+            var clientMock = SetupInitializers(fixture);
+
+            clientMock
+                .Setup(m => m.DescribeLogStreamsAsync(It.IsAny<DescribeLogStreamsRequest>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult(fixture.Build<DescribeLogStreamsResponse>()
+                    .With(r => r.HttpStatusCode, HttpStatusCode.OK)
+                    .With(r => r.LogStreams, new List<LogStream> { new LogStream { LogStreamName = stream, UploadSequenceToken = "1" } })
+                    .Create()));
+
+            clientMock
+               .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
+               .Returns<PutLogEventsRequest, CancellationToken>((r, c) =>
+               {
+                   return Task
+                    .Delay(fixture.Create<int>() % 500)
+                    .ContinueWith(t =>
+                    {
+                        int tokenInt = int.Parse(r.SequenceToken);
+                        // Should collect tokens to ensure sequence.
+                        return new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.OK, NextSequenceToken = (tokenInt++).ToString() };
+                    });
+               });
+
+            var target1 = new CloudWatchLogsClientWrapper(clientMock.Object, group, stream);
+            var target2 = new CloudWatchLogsClientWrapper(clientMock.Object, group, stream);
+            var target3 = new CloudWatchLogsClientWrapper(clientMock.Object, group, stream);
+
+            // act
+            await Task.WhenAll(new []
+            {
+                target1.WriteAsync(fixture.CreateMany<InputLogEvent>()),
+                target2.WriteAsync(fixture.CreateMany<InputLogEvent>()),
+                target3.WriteAsync(fixture.CreateMany<InputLogEvent>())
+            });
+
+            // assert
+            Assert.Inconclusive();
         }
     }
 }
