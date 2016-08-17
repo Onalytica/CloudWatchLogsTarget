@@ -38,6 +38,7 @@ namespace NLog.Targets.CloudWatchLogs
         {
             _currentTask = Policy
                 .Handle<AWSFailedRequestException>()
+                .Or<AmazonCloudWatchLogsException>()
                 .WaitAndRetryAsync(_retries, retryCount => TimeSpan.FromSeconds(Math.Pow(_backoffBaseInSeconds, retryCount)))
                 .ExecuteAsync(async () =>
                 {
@@ -68,6 +69,7 @@ namespace NLog.Targets.CloudWatchLogs
             _currentTask = _currentTask
                 .ContinueWith(prevt => Policy
                     .Handle<AWSFailedRequestException>()
+                    .Or<AmazonCloudWatchLogsException>()
                     .WaitAndRetryAsync(_retries, retryCount => TimeSpan.FromSeconds(Math.Pow(_backoffBaseInSeconds, retryCount)))
                     .ExecuteAsync(async () =>
                     {

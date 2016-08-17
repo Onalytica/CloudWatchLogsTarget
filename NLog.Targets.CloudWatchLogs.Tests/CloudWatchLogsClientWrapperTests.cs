@@ -153,6 +153,39 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         }
 
         [TestMethod]
+        public async Task Init_Should_Retry_Requests_Resulting_In_Amazon_Exceptions()
+        {
+            // arrange
+            var fixture = FixtureHelpers.Init();
+            int actualRetries = 0, expectedRetries = 3;
+            var clientMock = fixture.Freeze<Mock<IAmazonCloudWatchLogs>>();
+            clientMock
+                .Setup(m => m.DescribeLogGroupsAsync(It.IsAny<DescribeLogGroupsRequest>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult(fixture.Build<DescribeLogGroupsResponse>().With(r => r.HttpStatusCode, HttpStatusCode.OK).Create()));
+            clientMock
+                .Setup(m => m.CreateLogGroupAsync(It.IsAny<CreateLogGroupRequest>(), It.IsAny<CancellationToken>()))
+                .Returns<CreateLogGroupRequest, CancellationToken>((r, c) =>
+                {
+                    actualRetries++;
+                    if (actualRetries <= (expectedRetries - 1))
+                        throw new OperationAbortedException("something happened.");
+
+                    return Task.FromResult(new CreateLogGroupResponse { HttpStatusCode = HttpStatusCode.OK });
+                });
+            clientMock
+               .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
+               .Returns(Task.FromResult(fixture.Build<PutLogEventsResponse>().With(r => r.HttpStatusCode, HttpStatusCode.OK).Create()));
+
+            var target = fixture.Create<CloudWatchLogsClientWrapper>();
+
+            // act
+            await target.WriteAsync(fixture.CreateMany<InputLogEvent>());
+
+            // assert
+            Assert.AreEqual(expectedRetries, actualRetries);
+        }
+
+        [TestMethod]
         public async Task WriteAsync_Should_Order_Log_Events_Chronologically_Before_Sending()
         {
             // arange
