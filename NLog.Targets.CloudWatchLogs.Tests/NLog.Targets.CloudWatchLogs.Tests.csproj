@@ -16,6 +16,7 @@
     <ReferencePath>$(ProgramFiles)\Common Files\microsoft shared\VSTT\$(VisualStudioVersion)\UITestExtensionPackages</ReferencePath>
     <IsCodedUITest>False</IsCodedUITest>
     <TestProjectType>UnitTest</TestProjectType>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -48,7 +49,7 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="NLog.Targets.CloudWatchLogs">
-      <HintPath>..\..\..\..\..\NLog\Targets\CloudWatchLogs\NLog.Targets.CloudWatchLogs\artifacts\bin\NLog.Targets.CloudWatchLogs\Debug\net451\NLog.Targets.CloudWatchLogs.dll</HintPath>
+      <HintPath>..\NLog.Targets.CloudWatchLogs\bin\$(Configuration)\net45\NLog.Targets.CloudWatchLogs.dll</HintPath>
     </Reference>
     <Reference Include="Ploeh.AutoFixture, Version=3.50.1.0, Culture=neutral, PublicKeyToken=b24654c590009d4f, processorArchitecture=MSIL">
       <HintPath>..\packages\AutoFixture.3.50.1\lib\net40\Ploeh.AutoFixture.dll</HintPath>

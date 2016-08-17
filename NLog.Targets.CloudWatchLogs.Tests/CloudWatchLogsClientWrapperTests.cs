@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Ploeh.AutoFixture;
@@ -149,6 +150,36 @@ namespace NLog.Targets.CloudWatchLogs.Tests
 
             // assert
             Assert.AreEqual(expectedRetries, actualRetries);
+        }
+
+        [TestMethod]
+        public async Task WriteAsync_Should_Order_Log_Events_Chronologically_Before_Sending()
+        {
+            // arange
+            var fixture = FixtureHelpers.Init();
+            var clientMock = SetupInitializers(fixture);
+            var events = new[]
+            {
+                new InputLogEvent { Timestamp = DateTime.UtcNow },
+                new InputLogEvent { Timestamp = DateTime.UtcNow.AddSeconds(-1) }
+            };
+            List<InputLogEvent> actual = null, expected = events.OrderBy(e => e.Timestamp).ToList();
+
+            clientMock
+               .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
+               .Returns<PutLogEventsRequest, CancellationToken>((r,c) =>
+               {
+                   actual = r.LogEvents;
+                   return Task.FromResult(fixture.Build<PutLogEventsResponse>().With(rsp => rsp.HttpStatusCode, HttpStatusCode.OK).Create());
+               });
+
+            var target = fixture.Create<CloudWatchLogsClientWrapper>();
+
+            // act
+            await target.WriteAsync(events);
+
+            // assert
+            Assert.IsTrue(expected.SequenceEqual(actual), "Actual events sequence should be ordered chronologically.");
         }
     }
 }

@@ -77,7 +77,7 @@ namespace NLog.Targets.CloudWatchLogs
                                 LogGroupName = _logGroupName,
                                 LogStreamName = _logStreamName,
                                 SequenceToken = _sequenceToken,
-                                LogEvents = logEvents.ToList()
+                                LogEvents = logEvents.OrderBy(e => e.Timestamp).ToList()
                             })
                             .ConfigureAwait(false))
                             .Verify(nameof(_client.PutLogEventsAsync));
