@@ -1,12 +1,8 @@
-﻿using Ploeh.AutoFixture;
+﻿using System;
+using Ploeh.AutoFixture;
 using Ploeh.AutoFixture.AutoMoq;
-using System.Net;
-using Amazon.CloudWatchLogs;
-using Amazon.CloudWatchLogs.Model;
-using Amazon.Runtime;
 using Moq;
-using System.Threading;
-using System.Threading.Tasks;
+using NLog.Targets.CloudWatchLogs.Interval;
 
 namespace NLog.Targets.CloudWatchLogs.Tests
 {
@@ -14,8 +10,12 @@ namespace NLog.Targets.CloudWatchLogs.Tests
     {
         public static IFixture Init()
         {
-            return new Fixture()
-                .Customize(new AutoMoqCustomization());
+            var fixture = new Fixture().Customize(new AutoMoqCustomization());
+
+            // Sets zero sleep duration to make tests of retry logic run faster.
+            fixture.Inject(Mock.Of<IIntervalProvider>(m => m.GetInterval(It.IsAny<int>()) == TimeSpan.Zero));
+
+            return fixture;
         }
     }
 }
