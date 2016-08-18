@@ -6,6 +6,7 @@ using Amazon.CloudWatchLogs;
 using Amazon.CloudWatchLogs.Model;
 using System.Collections.Generic;
 using System.Linq;
+using NLog.Targets.CloudWatchLogs.Interval;
 
 namespace NLog.Targets.CloudWatchLogs
 {
@@ -20,7 +21,8 @@ namespace NLog.Targets.CloudWatchLogs
                 new CloudWatchLogsClientWrapper(
                     new AmazonCloudWatchLogsClient(AWSAccessKeyId, AWSSecretKey, RegionEndpoint.GetBySystemName(AWSRegion)),
                     LogGroupName,
-                    LogStreamName));
+                    LogStreamName,
+                    new ExponentialInterval<Seconds>(2)));
         }
 
         [RequiredParameter]
