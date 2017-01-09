@@ -5,7 +5,7 @@ VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "NLog.Targets.CloudWatchLogs", "NLog.Targets.CloudWatchLogs\NLog.Targets.CloudWatchLogs.xproj", "{D9845C9C-DF1F-406F-8813-A4F0AC6AB7AA}"
 EndProject
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "NLog.Targets.CloudWatchLogs.Tests-NetStandard", "NLog.Targets.CloudWatchLogs.Tests-NetStandard\NLog.Targets.CloudWatchLogs.Tests-NetStandard.xproj", "{E3330BAB-6811-4B88-90ED-E16CBFE4D0D6}"
+Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "NLog.Targets.CloudWatchLogs.Tests", "NLog.Targets.CloudWatchLogs.Tests\NLog.Targets.CloudWatchLogs.Tests.xproj", "{E3330BAB-6811-4B88-90ED-E16CBFE4D0D6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
