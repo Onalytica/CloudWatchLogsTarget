@@ -13,11 +13,16 @@
     }
   },
   "dependencies": {
-    "AWSSDK.CloudWatchLogs": "3.1.3.1",
-    "NLog": "4.3.7",
-    "Polly": "4.3.0"
+    "AWSSDK.CloudWatchLogs": "3.3.1.1",
+    "NLog": "5.0.0-beta03",
+    "Polly": "5.0.2-v5-0-alpha0001"
   },
   "frameworks": {
+    "netstandard1.3": {
+      "dependencies": {
+        "NETStandard.Library": "1.6.0"
+      }
+    },
     "net45": {
     }
   }
