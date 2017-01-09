@@ -2,47 +2,83 @@
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Ploeh.AutoFixture;
 using Moq;
 using Amazon.CloudWatchLogs;
 using Amazon.CloudWatchLogs.Model;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Net;
-using System.Collections.Concurrent;
 using NLog.Targets.CloudWatchLogs.Interval;
 
 namespace NLog.Targets.CloudWatchLogs.Tests
 {
+    internal static class IAmazonCloudWatchLogsMockHelpers
+    {
+        internal static Mock<IAmazonCloudWatchLogs> InitDescribeGroup(this Mock<IAmazonCloudWatchLogs> mock)
+        {
+            mock
+            .Setup(m => m.DescribeLogGroupsAsync(It.IsAny<DescribeLogGroupsRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult(new DescribeLogGroupsResponse { HttpStatusCode = HttpStatusCode.OK }));
+            return mock;
+        }
+
+        internal static Mock<IAmazonCloudWatchLogs> InitCreateGroup(this Mock<IAmazonCloudWatchLogs> mock)
+        {
+            mock
+            .Setup(m => m.CreateLogGroupAsync(It.IsAny<CreateLogGroupRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult(new CreateLogGroupResponse { HttpStatusCode = HttpStatusCode.OK }));
+            return mock;
+        }
+
+        internal static Mock<IAmazonCloudWatchLogs> InitGroup(this Mock<IAmazonCloudWatchLogs> mock) => mock.InitDescribeGroup().InitCreateGroup();
+
+        internal static Mock<IAmazonCloudWatchLogs> InitDescribeStream(this Mock<IAmazonCloudWatchLogs> mock)
+        {
+            mock
+            .Setup(m => m.DescribeLogStreamsAsync(It.IsAny<DescribeLogStreamsRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult(new DescribeLogStreamsResponse { HttpStatusCode = HttpStatusCode.OK }));
+            return mock;
+        }
+
+        internal static Mock<IAmazonCloudWatchLogs> InitCreateStream(this Mock<IAmazonCloudWatchLogs> mock)
+        {
+            mock
+            .Setup(m => m.CreateLogStreamAsync(It.IsAny<CreateLogStreamRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult(new CreateLogStreamResponse { HttpStatusCode = HttpStatusCode.OK }));
+            return mock;
+        }
+
+        internal static Mock<IAmazonCloudWatchLogs> InitStream(this Mock<IAmazonCloudWatchLogs> mock) => mock.InitDescribeStream().InitCreateStream();
+
+        internal static Mock<IAmazonCloudWatchLogs> Init(this Mock<IAmazonCloudWatchLogs> mock) => mock.InitGroup().InitStream();
+    }
+
     [TestClass]
     public class CloudWatchLogsClientWrapperTests
     {
-        private Mock<IAmazonCloudWatchLogs> SetupInitializers(IFixture fixture)
+        private const string _logGroup = "some-log-group", _logStream = "some-log-stream";
+
+        private IIntervalProvider CreateIntervalProvider() =>
+            Mock.Of<IIntervalProvider>(m => m.GetInterval(It.IsAny<int>()) == TimeSpan.Zero);
+
+        private IEnumerable<InputLogEvent> CreateEvents(int count = 3)
         {
-            var clientMock = fixture.Freeze<Mock<IAmazonCloudWatchLogs>>();
-            clientMock
-                .Setup(m => m.DescribeLogGroups(It.IsAny<DescribeLogGroupsRequest>()))
-                .Returns(fixture.Build<DescribeLogGroupsResponse>().With(r => r.HttpStatusCode, HttpStatusCode.OK).Create());
-            clientMock
-                .Setup(m => m.CreateLogGroup(It.IsAny<CreateLogGroupRequest>()))
-                .Returns(fixture.Build<CreateLogGroupResponse>().With(r => r.HttpStatusCode, HttpStatusCode.OK).Create());
-            clientMock
-                .Setup(m => m.DescribeLogStreams(It.IsAny<DescribeLogStreamsRequest>()))
-                .Returns(fixture.Build<DescribeLogStreamsResponse>().With(r => r.HttpStatusCode, HttpStatusCode.OK).Create());
-            clientMock
-                .Setup(m => m.CreateLogStream(It.IsAny<CreateLogStreamRequest>()))
-                .Returns(fixture.Build<CreateLogStreamResponse>().With(r => r.HttpStatusCode, HttpStatusCode.OK).Create());
-            return clientMock;
+            return Enumerable.Range(1, count)
+                .OrderByDescending(i => i)
+                .Select(i => new InputLogEvent
+                {
+                    Timestamp = DateTime.Now.AddSeconds(-i),
+                    Message = i.ToString()
+                });
         }
+
 
         [TestMethod]
         public async Task WriteAsync_Should_Retry_Failed_Request_3_Times()
         {
             // arrange
             int actualRetries = 0, expectedRetries = 3;
-            var fixture = FixtureHelpers.Init();
-            var clientMock = SetupInitializers(fixture);
-
+            var clientMock = new Mock<IAmazonCloudWatchLogs>().Init();
             clientMock
                 .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
                 .Returns<PutLogEventsRequest, CancellationToken>((r, c) =>
@@ -51,11 +87,11 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                     return Task.FromResult(new PutLogEventsResponse { HttpStatusCode = actualRetries <= (expectedRetries - 1) ? HttpStatusCode.BadGateway : HttpStatusCode.OK });
                 });
 
-            var target = fixture.Create<CloudWatchLogsClientWrapper>();
+            var target = new CloudWatchLogsClientWrapper(clientMock.Object, _logGroup, _logStream, CreateIntervalProvider());
 
             // act
-            await target.WriteAsync(fixture.CreateMany<InputLogEvent>());
-
+            await target.WriteAsync(CreateEvents());
+            
             // assert
             Assert.AreEqual(expectedRetries, actualRetries);
         }
@@ -65,8 +101,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         public async Task WriteAsync_Should_Throw_AWSFailedRequestException()
         {
             // arrange
-            var fixture = FixtureHelpers.Init();
-            var clientMock = SetupInitializers(fixture);
+            var clientMock = new Mock<IAmazonCloudWatchLogs>().Init();
 
             clientMock
                 .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
@@ -75,10 +110,10 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                     return Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.BadGateway });
                 });
 
-            var target = fixture.Create<CloudWatchLogsClientWrapper>();
+            var target = new CloudWatchLogsClientWrapper(clientMock.Object, _logGroup, _logStream, CreateIntervalProvider());
 
             // act
-            await target.WriteAsync(fixture.CreateMany<InputLogEvent>());
+            await target.WriteAsync(CreateEvents());
         }
 
         [TestMethod]
@@ -86,8 +121,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         public async Task WriteAsync_Should_Throw_InvalidSequenceTokenException()
         {
             // arrange
-            var fixture = FixtureHelpers.Init();
-            var clientMock = SetupInitializers(fixture);
+            var clientMock = new Mock<IAmazonCloudWatchLogs>().Init();
 
             clientMock
                 .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
@@ -96,18 +130,18 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                     throw new InvalidSequenceTokenException("invalid token");
                 });
 
-            var target = fixture.Create<CloudWatchLogsClientWrapper>();
+            var target = new CloudWatchLogsClientWrapper(clientMock.Object, _logGroup, _logStream, CreateIntervalProvider());
 
             // act
-            await target.WriteAsync(fixture.CreateMany<InputLogEvent>());
+            await target.WriteAsync(CreateEvents());
         }
 
         [TestMethod]
         public async Task WriteAsync_Should_Queue_Log_Requests_And_Preserve_Their_Order()
         {
             // arrange
-            var fixture = FixtureHelpers.Init();
-            var clientMock = SetupInitializers(fixture);
+            var rand = new Random();
+            var clientMock = new Mock<IAmazonCloudWatchLogs>().Init();
             var expectedSequence = Enumerable.Range(0, 20);
             List<int> actualSequence = new List<int>(), retried = new List<int>();
 
@@ -116,7 +150,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                 .Returns<PutLogEventsRequest, CancellationToken>((r, c) =>
                 {
                     return Task
-                        .Delay(fixture.Create<int>() % 500) // Simulates delay on the API side
+                        .Delay(rand.Next() % 500) // Simulates delay on the API side
                         .ContinueWith(t =>
                         {
                             PutLogEventsResponse result;
@@ -136,7 +170,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                         });
                 });
 
-            var target = fixture.Create<CloudWatchLogsClientWrapper>();
+            var target = new CloudWatchLogsClientWrapper(clientMock.Object, _logGroup, _logStream, CreateIntervalProvider());
 
             // act
             await Task.WhenAll(expectedSequence
@@ -152,24 +186,28 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         public async Task Init_Should_Retry_Failed_Requests()
         {
             // arrange
-            var fixture = FixtureHelpers.Init();
             int actualRetries = 0, expectedRetries = 3;
-            var clientMock = SetupInitializers(fixture);
+            string logGroup = Guid.NewGuid().ToString(), logStream = Guid.NewGuid().ToString();
+            var clientMock = new Mock<IAmazonCloudWatchLogs>().InitCreateGroup().InitStream();
             clientMock
-                .Setup(m => m.DescribeLogGroups(It.IsAny<DescribeLogGroupsRequest>()))
-                .Returns<DescribeLogGroupsRequest>(r =>
+                .Setup(m => m.DescribeLogGroupsAsync(It.IsAny<DescribeLogGroupsRequest>(), It.IsAny<CancellationToken>()))
+                .Returns<DescribeLogGroupsRequest, CancellationToken>((r, c) =>
                 {
                     actualRetries++;
-                    return new DescribeLogGroupsResponse { HttpStatusCode = actualRetries <= (expectedRetries - 1) ? HttpStatusCode.BadGateway : HttpStatusCode.OK };
+                    bool success = actualRetries > (expectedRetries - 1);
+                    return Task.FromResult(new DescribeLogGroupsResponse {
+                        HttpStatusCode = success ? HttpStatusCode.OK : HttpStatusCode.BadGateway,
+                        LogGroups = success ? new List<LogGroup> { new LogGroup { LogGroupName = r.LogGroupNamePrefix } } : null
+                    });
                 });
             clientMock
                .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
-               .Returns(Task.FromResult(fixture.Build<PutLogEventsResponse>().With(r => r.HttpStatusCode, HttpStatusCode.OK).Create()));
+               .Returns(Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.OK }));
 
-            var target = fixture.Create<CloudWatchLogsClientWrapper>();
+            var target = new CloudWatchLogsClientWrapper(clientMock.Object, logGroup, logStream, CreateIntervalProvider());
 
             // act
-            await target.WriteAsync(fixture.CreateMany<InputLogEvent>());
+            await target.WriteAsync(CreateEvents());
 
             // assert
             Assert.AreEqual(expectedRetries, actualRetries);
@@ -179,30 +217,30 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         public async Task Init_Should_Retry_Requests_Resulting_In_Amazon_Exceptions()
         {
             // arrange
-            var fixture = FixtureHelpers.Init();
             int actualRetries = 0, expectedRetries = 3;
-            var clientMock = SetupInitializers(fixture);
+            string logGroup = Guid.NewGuid().ToString(), logStream = Guid.NewGuid().ToString();
+            var clientMock = new Mock<IAmazonCloudWatchLogs>().InitStream();
             clientMock
-                .Setup(m => m.DescribeLogGroups(It.IsAny<DescribeLogGroupsRequest>()))
-                .Returns(fixture.Build<DescribeLogGroupsResponse>().With(r => r.HttpStatusCode, HttpStatusCode.OK).Create());
+                .Setup(m => m.DescribeLogGroupsAsync(It.IsAny<DescribeLogGroupsRequest>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult(new DescribeLogGroupsResponse { HttpStatusCode = HttpStatusCode.OK }));
             clientMock
-                .Setup(m => m.CreateLogGroup(It.IsAny<CreateLogGroupRequest>()))
-                .Returns<CreateLogGroupRequest>(r =>
+                .Setup(m => m.CreateLogGroupAsync(It.IsAny<CreateLogGroupRequest>(), It.IsAny<CancellationToken>()))
+                .Returns<CreateLogGroupRequest, CancellationToken>((r, c) =>
                 {
                     actualRetries++;
                     if (actualRetries <= (expectedRetries - 1))
                         throw new OperationAbortedException("something happened.");
 
-                    return new CreateLogGroupResponse { HttpStatusCode = HttpStatusCode.OK };
+                    return Task.FromResult(new CreateLogGroupResponse { HttpStatusCode = HttpStatusCode.OK });
                 });
             clientMock
                .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
-               .Returns(Task.FromResult(fixture.Build<PutLogEventsResponse>().With(r => r.HttpStatusCode, HttpStatusCode.OK).Create()));
+               .Returns(Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.OK }));
 
-            var target = fixture.Create<CloudWatchLogsClientWrapper>();
+            var target = new CloudWatchLogsClientWrapper(clientMock.Object, logGroup, logStream, CreateIntervalProvider());
 
             // act
-            await target.WriteAsync(fixture.CreateMany<InputLogEvent>());
+            await target.WriteAsync(CreateEvents());
 
             // assert
             Assert.AreEqual(expectedRetries, actualRetries);
@@ -212,8 +250,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         public async Task WriteAsync_Should_Order_Log_Events_Chronologically_Before_Sending()
         {
             // arange
-            var fixture = FixtureHelpers.Init();
-            var clientMock = SetupInitializers(fixture);
+            var clientMock = new Mock<IAmazonCloudWatchLogs>().Init();
             var events = new[]
             {
                 new InputLogEvent { Timestamp = DateTime.UtcNow },
@@ -226,10 +263,10 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                .Returns<PutLogEventsRequest, CancellationToken>((r,c) =>
                {
                    actual = r.LogEvents;
-                   return Task.FromResult(fixture.Build<PutLogEventsResponse>().With(rsp => rsp.HttpStatusCode, HttpStatusCode.OK).Create());
+                   return Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.OK });
                });
 
-            var target = fixture.Create<CloudWatchLogsClientWrapper>();
+            var target = new CloudWatchLogsClientWrapper(clientMock.Object, _logGroup, _logStream, CreateIntervalProvider());
 
             // act
             await target.WriteAsync(events);
@@ -242,18 +279,17 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         public async Task WriteAsync_Should_Handle_Concurent_Requests_From_Multiple_Target_Insances()
         {
             // arange
-            var group = "same-group";
-            var stream = "same-stream";
-            var fixture = FixtureHelpers.Init();
-            var clientMock = SetupInitializers(fixture);
+            string logGroup = Guid.NewGuid().ToString(), logStream = Guid.NewGuid().ToString();
+            var clientMock = new Mock<IAmazonCloudWatchLogs>().InitGroup().InitCreateStream();
             var tokens = new List<int>();
 
             clientMock
-                .Setup(m => m.DescribeLogStreams(It.IsAny<DescribeLogStreamsRequest>()))
-                .Returns(fixture.Build<DescribeLogStreamsResponse>()
-                    .With(r => r.HttpStatusCode, HttpStatusCode.OK)
-                    .With(r => r.LogStreams, new List<LogStream> { new LogStream { LogStreamName = stream, UploadSequenceToken = "1" } })
-                    .Create());
+                .Setup(m => m.DescribeLogStreamsAsync(It.IsAny<DescribeLogStreamsRequest>(), It.IsAny<CancellationToken>()))
+                .Returns((DescribeLogStreamsRequest req, CancellationToken token) => Task.FromResult(new DescribeLogStreamsResponse
+                {
+                    HttpStatusCode = HttpStatusCode.OK,
+                    LogStreams = new List<LogStream> { new LogStream { LogStreamName = req.LogStreamNamePrefix, UploadSequenceToken = "1" } }
+                }));
 
             clientMock
                .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
@@ -271,17 +307,17 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                    return Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.OK, NextSequenceToken = (tokenInt+1).ToString() });
                });
 
-            var intervalProvider = fixture.Create<IIntervalProvider>();
-            var target1 = new CloudWatchLogsClientWrapper(clientMock.Object, group, stream, intervalProvider);
-            var target2 = new CloudWatchLogsClientWrapper(clientMock.Object, group, stream, intervalProvider);
-            var target3 = new CloudWatchLogsClientWrapper(clientMock.Object, group, stream, intervalProvider);
+            var intervalProvider = CreateIntervalProvider();
+            var target1 = new CloudWatchLogsClientWrapper(clientMock.Object, logGroup, logStream, intervalProvider);
+            var target2 = new CloudWatchLogsClientWrapper(clientMock.Object, logGroup, logStream, intervalProvider);
+            var target3 = new CloudWatchLogsClientWrapper(clientMock.Object, logGroup, logStream, intervalProvider);
 
             // act
             await Task.WhenAll(new []
             {
-                target1.WriteAsync(fixture.CreateMany<InputLogEvent>()),
-                target2.WriteAsync(fixture.CreateMany<InputLogEvent>()),
-                target3.WriteAsync(fixture.CreateMany<InputLogEvent>())
+                target1.WriteAsync(CreateEvents()),
+                target2.WriteAsync(CreateEvents()),
+                target3.WriteAsync(CreateEvents())
             });
 
             // assert
@@ -294,19 +330,20 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         public async Task WriteAsync_Should_Reinit_Sequence_Token_If_All_Retries_Fail()
         {
             // arrange
-            var fixture = FixtureHelpers.Init();
-            var clientMock = SetupInitializers(fixture);
+            string logGroup = Guid.NewGuid().ToString(), logStream = Guid.NewGuid().ToString();
+            var clientMock = new Mock<IAmazonCloudWatchLogs>().InitGroup().InitCreateStream();
             int token = 1;
             string successfullToken = null;
 
             clientMock
-                .Setup(m => m.DescribeLogStreams(It.IsAny<DescribeLogStreamsRequest>()))
-                .Returns<DescribeLogStreamsRequest>(r => new DescribeLogStreamsResponse
+                .Setup(m => m.DescribeLogStreamsAsync(It.IsAny<DescribeLogStreamsRequest>(), It.IsAny<CancellationToken>()))
+                .Returns<DescribeLogStreamsRequest, CancellationToken>((r, c) => Task.FromResult(
+                    new DescribeLogStreamsResponse
                     {
                         HttpStatusCode = HttpStatusCode.OK,
                         LogStreams = new List<LogStream> { new LogStream { LogStreamName = r.LogStreamNamePrefix, UploadSequenceToken = token++.ToString() } }
                     }
-                );
+                ));
 
             clientMock
                .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
@@ -319,13 +356,13 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                    return Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.OK });
                });
 
-            var target = fixture.Create<CloudWatchLogsClientWrapper>();
+            var target = new CloudWatchLogsClientWrapper(clientMock.Object, logGroup, logStream, CreateIntervalProvider());
 
             // act
             try
             {
                 // first time should fail.
-                await target.WriteAsync(fixture.CreateMany<InputLogEvent>());
+                await target.WriteAsync(CreateEvents());
                 Assert.Fail("First WriteAsync call should have failed.");
             }
             catch (InvalidSequenceTokenException)
@@ -333,7 +370,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             }
 
             // second time should be successful
-            await target.WriteAsync(fixture.CreateMany<InputLogEvent>());
+            await target.WriteAsync(CreateEvents());
 
             // assert
             Assert.AreEqual("2", successfullToken);

@@ -1,7 +1,5 @@
-﻿using System;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Amazon.Runtime;
-using Ploeh.AutoFixture;
 
 namespace NLog.Targets.CloudWatchLogs.Tests
 {
@@ -13,11 +11,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         public void Verify_Should_Raise_Exception()
         {
             // arrange
-            var fixture = FixtureHelpers.Init();
-            var response = fixture
-                .Build<AmazonWebServiceResponse>()
-                .With(s => s.HttpStatusCode, System.Net.HttpStatusCode.BadGateway)
-                .Create();
+            var response = new AmazonWebServiceResponse { HttpStatusCode = System.Net.HttpStatusCode.BadGateway };
 
             // act
             response.Verify();
@@ -27,11 +21,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         public void Verified_Should_Return_Same_Response_Object()
         {
             // arrange
-            var fixture = FixtureHelpers.Init();
-            var response = fixture
-                .Build<AmazonWebServiceResponse>()
-                .With(s => s.HttpStatusCode, System.Net.HttpStatusCode.OK)
-                .Create();
+            var response = new AmazonWebServiceResponse { HttpStatusCode = System.Net.HttpStatusCode.OK };
 
             // act
             var result = response.Verify("some name");
@@ -44,11 +34,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         public void IsSuccessful_Should_Return_False()
         {
             // arrange
-            var fixture = FixtureHelpers.Init();
-            var response = fixture
-                .Build<AmazonWebServiceResponse>()
-                .With(s => s.HttpStatusCode, System.Net.HttpStatusCode.Ambiguous)
-                .Create();
+            var response = new AmazonWebServiceResponse { HttpStatusCode = System.Net.HttpStatusCode.Ambiguous };
 
             // act
             var result = response.IsSuccessful();

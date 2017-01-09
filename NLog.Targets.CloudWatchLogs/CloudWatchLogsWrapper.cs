@@ -57,28 +57,29 @@ namespace NLog.Targets.CloudWatchLogs
             return Policy
                 .Handle<AWSFailedRequestException>()
                 .Or<AmazonCloudWatchLogsException>()
-                .WaitAndRetry(_retries, retryCount => _sleepDurationProvider.GetInterval(retryCount))
-                .Execute(() =>
+                .WaitAndRetryAsync(_retries, retryCount => _sleepDurationProvider.GetInterval(retryCount))
+                .ExecuteAsync(async () =>
                 {
                     string nextToken = null;
 
                     // We check if the log group exists and create if it doesn't.
-                    var logGroupsResponse = _client.DescribeLogGroups(new DescribeLogGroupsRequest { LogGroupNamePrefix = _logGroupName });
-                    if (!logGroupsResponse.Verify(nameof(_client.DescribeLogGroups)).LogGroups.Any(lg => lg.LogGroupName == _logGroupName))
-                        _client.CreateLogGroup(new CreateLogGroupRequest { LogGroupName = _logGroupName })
-                            .Verify(nameof(_client.CreateLogGroup));
+                    var logGroupsResponse = await _client.DescribeLogGroupsAsync(new DescribeLogGroupsRequest { LogGroupNamePrefix = _logGroupName });
+                    if (!logGroupsResponse.Verify(nameof(_client.DescribeLogGroupsAsync)).LogGroups.Any(lg => lg.LogGroupName == _logGroupName))
+                        (await _client.CreateLogGroupAsync(new CreateLogGroupRequest { LogGroupName = _logGroupName }))
+                            .Verify(nameof(_client.CreateLogGroupAsync));
 
                     // We check if the log stream exsists within the log group and create if it doesn't or save the UploadSequenceToken if it does.
-                    var logStreamsResponse = _client.DescribeLogStreams(new DescribeLogStreamsRequest { LogGroupName = _logGroupName, LogStreamNamePrefix = _logStreamName });
-                    var stream = logStreamsResponse.Verify(nameof(_client.DescribeLogStreams)).LogStreams.FirstOrDefault(ls => ls.LogStreamName == _logStreamName);
+                    var logStreamsResponse = await _client.DescribeLogStreamsAsync(new DescribeLogStreamsRequest { LogGroupName = _logGroupName, LogStreamNamePrefix = _logStreamName });
+                    var stream = logStreamsResponse.Verify(nameof(_client.DescribeLogStreamsAsync)).LogStreams.FirstOrDefault(ls => ls.LogStreamName == _logStreamName);
                     if (stream == null)
-                        _client.CreateLogStream(new CreateLogStreamRequest { LogStreamName = _logStreamName, LogGroupName = _logGroupName })
-                            .Verify(nameof(_client.CreateLogStream));
+                        (await _client.CreateLogStreamAsync(new CreateLogStreamRequest { LogStreamName = _logStreamName, LogGroupName = _logGroupName }))
+                            .Verify(nameof(_client.CreateLogStreamAsync));
                     else
                         nextToken = stream.UploadSequenceToken;
 
                     return nextToken;
-                });
+                })
+                .Result;
         }
 
         /// <summary>
