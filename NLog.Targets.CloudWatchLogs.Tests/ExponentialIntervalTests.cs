@@ -1,16 +1,15 @@
 ﻿using System;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using NLog.Targets.CloudWatchLogs.Interval;
+using Xunit;
 
 namespace NLog.Targets.CloudWatchLogs.Tests
 {
     /// <summary>
     /// Summary description for ExponentialIntervalTests
     /// </summary>
-    [TestClass]
     public class ExponentialIntervalTests
     {
-        [TestMethod]
+        [Fact]
         public void GetInterval_Should_Return_8_Seconds()
         {
             // arrange
@@ -20,10 +19,10 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             var actual = target.GetInterval(3);
 
             // assert
-            Assert.AreEqual(TimeSpan.FromSeconds(8), actual);
+            Assert.Equal(TimeSpan.FromSeconds(8), actual);
         }
 
-        [TestMethod]
+        [Fact]
         public void GetInterval_Should_Return_25_Minutes()
         {
             // arrange
@@ -33,10 +32,10 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             var actual = target.GetInterval(2);
 
             // assert
-            Assert.AreEqual(TimeSpan.FromMinutes(25), actual);
+            Assert.Equal(TimeSpan.FromMinutes(25), actual);
         }
 
-        [TestMethod]
+        [Fact]
         public void GetInterval_Should_Return_1_Hour()
         {
             // arrange
@@ -46,7 +45,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             var actual = target.GetInterval(10);
 
             // assert
-            Assert.AreEqual(TimeSpan.FromHours(1), actual);
+            Assert.Equal(TimeSpan.FromHours(1), actual);
         }
     }
 }

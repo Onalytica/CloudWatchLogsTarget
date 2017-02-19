@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Amazon.CloudWatchLogs;
 using Amazon.CloudWatchLogs.Model;
@@ -9,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Net;
 using NLog.Targets.CloudWatchLogs.Interval;
+using Xunit;
 
 namespace NLog.Targets.CloudWatchLogs.Tests
 {
@@ -53,7 +53,6 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         internal static Mock<IAmazonCloudWatchLogs> Init(this Mock<IAmazonCloudWatchLogs> mock) => mock.InitGroup().InitStream();
     }
 
-    [TestClass]
     public class CloudWatchLogsClientWrapperTests
     {
         private const string _logGroup = "some-log-group", _logStream = "some-log-stream";
@@ -73,7 +72,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         }
 
 
-        [TestMethod]
+        [Fact]
         public async Task WriteAsync_Should_Retry_Failed_Request_3_Times()
         {
             // arrange
@@ -87,17 +86,19 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                     return Task.FromResult(new PutLogEventsResponse { HttpStatusCode = actualRetries <= (expectedRetries - 1) ? HttpStatusCode.BadGateway : HttpStatusCode.OK });
                 });
 
-            var target = new CloudWatchLogsClientWrapper(clientMock.Object, _logGroup, _logStream, CreateIntervalProvider());
+            var target = new CloudWatchLogsClientWrapper(
+                clientMock.Object, 
+                new CloudWatchLogsWrapperSettings(_logGroup, _logStream, CreateIntervalProvider())
+            );
 
             // act
             await target.WriteAsync(CreateEvents());
             
             // assert
-            Assert.AreEqual(expectedRetries, actualRetries);
+            Assert.Equal(expectedRetries, actualRetries);
         }
 
-        [TestMethod]
-        [ExpectedException(typeof(AWSFailedRequestException))]
+        [Fact]
         public async Task WriteAsync_Should_Throw_AWSFailedRequestException()
         {
             // arrange
@@ -110,14 +111,16 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                     return Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.BadGateway });
                 });
 
-            var target = new CloudWatchLogsClientWrapper(clientMock.Object, _logGroup, _logStream, CreateIntervalProvider());
+            var target = new CloudWatchLogsClientWrapper(
+                clientMock.Object,
+                new CloudWatchLogsWrapperSettings(_logGroup, _logStream, CreateIntervalProvider())
+            );
 
             // act
-            await target.WriteAsync(CreateEvents());
+            await Assert.ThrowsAsync<AWSFailedRequestException>(() =>target.WriteAsync(CreateEvents()));
         }
 
-        [TestMethod]
-        [ExpectedException(typeof(InvalidSequenceTokenException))]
+        [Fact]
         public async Task WriteAsync_Should_Throw_InvalidSequenceTokenException()
         {
             // arrange
@@ -130,13 +133,16 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                     throw new InvalidSequenceTokenException("invalid token");
                 });
 
-            var target = new CloudWatchLogsClientWrapper(clientMock.Object, _logGroup, _logStream, CreateIntervalProvider());
+            var target = new CloudWatchLogsClientWrapper(
+                clientMock.Object,
+                new CloudWatchLogsWrapperSettings(_logGroup, _logStream, CreateIntervalProvider())
+            );
 
             // act
-            await target.WriteAsync(CreateEvents());
+            await Assert.ThrowsAsync<InvalidSequenceTokenException>(() => target.WriteAsync(CreateEvents()));
         }
 
-        [TestMethod]
+        [Fact]
         public async Task WriteAsync_Should_Queue_Log_Requests_And_Preserve_Their_Order()
         {
             // arrange
@@ -170,7 +176,10 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                         });
                 });
 
-            var target = new CloudWatchLogsClientWrapper(clientMock.Object, _logGroup, _logStream, CreateIntervalProvider());
+            var target = new CloudWatchLogsClientWrapper(
+                clientMock.Object,
+                new CloudWatchLogsWrapperSettings(_logGroup, _logStream, CreateIntervalProvider())
+            );
 
             // act
             await Task.WhenAll(expectedSequence
@@ -178,11 +187,11 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                 .ToArray());
 
             // assert
-            Assert.IsTrue(expectedSequence.SequenceEqual(actualSequence), "Message sequence should be preserved.");
-            Assert.IsTrue(expectedSequence.Where(i => i % 5 == 0).SequenceEqual(retried), "Expected and actual retries should match.");
+            Assert.True(expectedSequence.SequenceEqual(actualSequence), "Message sequence should be preserved.");
+            Assert.True(expectedSequence.Where(i => i % 5 == 0).SequenceEqual(retried), "Expected and actual retries should match.");
         }
 
-        [TestMethod]
+        [Fact]
         public async Task Init_Should_Retry_Failed_Requests()
         {
             // arrange
@@ -204,16 +213,19 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
                .Returns(Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.OK }));
 
-            var target = new CloudWatchLogsClientWrapper(clientMock.Object, logGroup, logStream, CreateIntervalProvider());
+            var target = new CloudWatchLogsClientWrapper(
+                clientMock.Object,
+                new CloudWatchLogsWrapperSettings(logGroup, logStream, CreateIntervalProvider())
+            );
 
             // act
             await target.WriteAsync(CreateEvents());
 
             // assert
-            Assert.AreEqual(expectedRetries, actualRetries);
+            Assert.Equal(expectedRetries, actualRetries);
         }
 
-        [TestMethod]
+        [Fact]
         public async Task Init_Should_Retry_Requests_Resulting_In_Amazon_Exceptions()
         {
             // arrange
@@ -237,16 +249,19 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
                .Returns(Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.OK }));
 
-            var target = new CloudWatchLogsClientWrapper(clientMock.Object, logGroup, logStream, CreateIntervalProvider());
+            var target = new CloudWatchLogsClientWrapper(
+                clientMock.Object,
+                new CloudWatchLogsWrapperSettings(logGroup, logStream, CreateIntervalProvider())
+            );
 
             // act
             await target.WriteAsync(CreateEvents());
 
             // assert
-            Assert.AreEqual(expectedRetries, actualRetries);
+            Assert.Equal(expectedRetries, actualRetries);
         }
 
-        [TestMethod]
+        [Fact]
         public async Task WriteAsync_Should_Order_Log_Events_Chronologically_Before_Sending()
         {
             // arange
@@ -266,16 +281,19 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                    return Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.OK });
                });
 
-            var target = new CloudWatchLogsClientWrapper(clientMock.Object, _logGroup, _logStream, CreateIntervalProvider());
+            var target = new CloudWatchLogsClientWrapper(
+                clientMock.Object,
+                new CloudWatchLogsWrapperSettings(_logGroup, _logStream, CreateIntervalProvider())
+            );
 
             // act
             await target.WriteAsync(events);
 
             // assert
-            Assert.IsTrue(expected.SequenceEqual(actual), "Actual events sequence should be ordered chronologically.");
+            Assert.True(expected.SequenceEqual(actual), "Actual events sequence should be ordered chronologically.");
         }
 
-        [TestMethod]
+        [Fact]
         public async Task WriteAsync_Should_Handle_Concurent_Requests_From_Multiple_Target_Insances()
         {
             // arange
@@ -308,9 +326,18 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                });
 
             var intervalProvider = CreateIntervalProvider();
-            var target1 = new CloudWatchLogsClientWrapper(clientMock.Object, logGroup, logStream, intervalProvider);
-            var target2 = new CloudWatchLogsClientWrapper(clientMock.Object, logGroup, logStream, intervalProvider);
-            var target3 = new CloudWatchLogsClientWrapper(clientMock.Object, logGroup, logStream, intervalProvider);
+            var target1 = new CloudWatchLogsClientWrapper(
+                clientMock.Object,
+                new CloudWatchLogsWrapperSettings(logGroup, logStream, intervalProvider)
+            );
+            var target2 = new CloudWatchLogsClientWrapper(
+                clientMock.Object,
+                new CloudWatchLogsWrapperSettings(logGroup, logStream, intervalProvider)
+            );
+            var target3 = new CloudWatchLogsClientWrapper(
+                clientMock.Object,
+                new CloudWatchLogsWrapperSettings(logGroup, logStream, intervalProvider)
+            );
 
             // act
             await Task.WhenAll(new []
@@ -323,10 +350,10 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             // assert
             var actual = tokens.OrderBy(i => i);
             var expected = Enumerable.Range(1, 3);
-            Assert.IsTrue(expected.SequenceEqual(actual), $"Expected token sequence: {String.Join(",", expected)}, actual: {String.Join(",", actual)}");
+            Assert.True(expected.SequenceEqual(actual), $"Expected token sequence: {String.Join(",", expected)}, actual: {String.Join(",", actual)}");
         }
 
-        [TestMethod]
+        [Fact]
         public async Task WriteAsync_Should_Reinit_Sequence_Token_If_All_Retries_Fail()
         {
             // arrange
@@ -356,24 +383,17 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                    return Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.OK });
                });
 
-            var target = new CloudWatchLogsClientWrapper(clientMock.Object, logGroup, logStream, CreateIntervalProvider());
+            var target = new CloudWatchLogsClientWrapper(
+                clientMock.Object,
+                new CloudWatchLogsWrapperSettings(logGroup, logStream, CreateIntervalProvider())
+            );
 
             // act
-            try
-            {
-                // first time should fail.
-                await target.WriteAsync(CreateEvents());
-                Assert.Fail("First WriteAsync call should have failed.");
-            }
-            catch (InvalidSequenceTokenException)
-            {
-            }
-
-            // second time should be successful
-            await target.WriteAsync(CreateEvents());
+            await Assert.ThrowsAsync<InvalidSequenceTokenException>(() => target.WriteAsync(CreateEvents())); // first time should fail.
+            await target.WriteAsync(CreateEvents()); // second time should be successful.
 
             // assert
-            Assert.AreEqual("2", successfullToken);
+            Assert.Equal("2", successfullToken);
         }
     }
 }

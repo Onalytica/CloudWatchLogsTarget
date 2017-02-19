@@ -1,17 +1,15 @@
 {
   "version": "1.0.0-*",
+  "testRunner": "xunit",
 
   "dependencies": {
     "NLog.Targets.CloudWatchLogs": {
       "target": "project"
     },
-    "MSTest.TestFramework": "1.0.8-rc",
-    "dotnet-test-mstest": "1.1.2-preview",
     "Moq": "4.6.38-alpha",
-    "MSTest.TestAdapter": "1.1.8-rc"
+    "xunit": "2.2.0-beta5-build3474",
+    "dotnet-test-xunit": "2.2.0-preview2-build1029"
   },
-
-  "testRunner": "mstest",
 
   "frameworks": {
     "netcoreapp1.0": {

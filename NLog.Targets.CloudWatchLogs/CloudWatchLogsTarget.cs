@@ -2,33 +2,34 @@
 using NLog.Config;
 using NLog.Common;
 using Amazon;
+using Amazon.Runtime;
 using Amazon.CloudWatchLogs;
 using Amazon.CloudWatchLogs.Model;
-using System.Collections.Generic;
 using System.Linq;
-using NLog.Targets.CloudWatchLogs.Interval;
+using NLog.Targets.CloudWatchLogs.Credentials;
 
 namespace NLog.Targets.CloudWatchLogs
 {
     [Target("CloudWatchLogs")]
     public sealed class CloudWatchLogsTarget : TargetWithLayout
     {
-        private Lazy<CloudWatchLogsClientWrapper> _client;
+        private readonly Lazy<CloudWatchLogsClientWrapper> _client;
 
         public CloudWatchLogsTarget()
         {
-            _client = new Lazy<CloudWatchLogsClientWrapper>(() => 
+            _client = new Lazy<CloudWatchLogsClientWrapper>(() =>
                 new CloudWatchLogsClientWrapper(
-                    new AmazonCloudWatchLogsClient(AWSAccessKeyId, AWSSecretKey, RegionEndpoint.GetBySystemName(AWSRegion)),
-                    LogGroupName,
-                    LogStreamName,
-                    new ExponentialInterval<Seconds>(2)));
+                    new AmazonCloudWatchLogsClient(
+                        AWSCredentialsProvider.GetCredentialsOrDefault(AWSAccessKeyId, AWSSecretKey),
+                        RegionEndpoint.GetBySystemName(AWSRegion)
+                    ),
+                    new CloudWatchLogsWrapperSettings(LogGroupName, LogStreamName)
+                )
+            );
         }
 
-        [RequiredParameter]
         public string AWSAccessKeyId { get; set; }
 
-        [RequiredParameter]
         public string AWSSecretKey { get; set; }
 
         [RequiredParameter]

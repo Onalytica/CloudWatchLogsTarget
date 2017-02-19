@@ -1,23 +1,21 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Amazon.Runtime;
+﻿using Amazon.Runtime;
+using Xunit;
 
 namespace NLog.Targets.CloudWatchLogs.Tests
 {
-    [TestClass]
     public class AWSResponseHelperTests
     {
-        [TestMethod]
-        [ExpectedException(typeof(AWSFailedRequestException))]
+        [Fact]
         public void Verify_Should_Raise_Exception()
         {
             // arrange
             var response = new AmazonWebServiceResponse { HttpStatusCode = System.Net.HttpStatusCode.BadGateway };
 
             // act
-            response.Verify();
+            Assert.Throws<AWSFailedRequestException>(() => response.Verify());
         }
 
-        [TestMethod]
+        [Fact]
         public void Verified_Should_Return_Same_Response_Object()
         {
             // arrange
@@ -27,10 +25,10 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             var result = response.Verify("some name");
 
             // assert
-            Assert.AreSame(response, result);
+            Assert.Same(response, result);
         }
 
-        [TestMethod]
+        [Fact]
         public void IsSuccessful_Should_Return_False()
         {
             // arrange
@@ -40,7 +38,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             var result = response.IsSuccessful();
 
             // assert
-            Assert.IsFalse(result);
+            Assert.False(result);
         }
     }
 }

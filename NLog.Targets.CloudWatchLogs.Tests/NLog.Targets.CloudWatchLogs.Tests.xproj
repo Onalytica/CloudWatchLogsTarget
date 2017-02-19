@@ -7,7 +7,7 @@
   <Import Project="$(VSToolsPath)\DotNet\Microsoft.DotNet.Props" Condition="'$(VSToolsPath)' != ''" />
   <PropertyGroup Label="Globals">
     <ProjectGuid>e3330bab-6811-4b88-90ed-e16cbfe4d0d6</ProjectGuid>
-    <RootNamespace>NLog.Targets.CloudWatchLogs.Tests_NetStandard</RootNamespace>
+    <RootNamespace>NLog.Targets.CloudWatchLogs.Tests</RootNamespace>
     <BaseIntermediateOutputPath Condition="'$(BaseIntermediateOutputPath)'=='' ">.\obj</BaseIntermediateOutputPath>
     <OutputPath Condition="'$(OutputPath)'=='' ">.\bin\</OutputPath>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
