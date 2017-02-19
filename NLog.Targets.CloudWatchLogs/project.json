@@ -1,5 +1,5 @@
 ﻿{
-  "version": "1.2.0-*",
+  "version": "1.2.0-beta",
   "description": "NLog target for Amazon CloudWatch Logs.",
   "authors": [ "nanestev" ],
   "packOptions": {
