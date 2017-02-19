@@ -37,7 +37,7 @@ The example above will use the configured AWS credentials or the instance role. 
 		layout="${longdate} [${threadid}] ${level} ${logger} [${ndc}] - ${message}"/>
 ```
 
-The provided AWS user has to have the following permissions:
+The provided AWS user or role should have the following permissions:
 
 ```
 logs:CreateLogGroup
