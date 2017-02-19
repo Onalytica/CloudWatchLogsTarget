@@ -54,13 +54,13 @@ namespace NLog.Targets.CloudWatchLogs
             }
         }
 
-        [RequiredParameter]
+        //[RequiredParameter]
         public string AWSAccessKeyId { get; set; }
 
-        [RequiredParameter]
+        //[RequiredParameter]
         public string AWSSecretKey { get; set; }
 
-        [RequiredParameter]
+        //[RequiredParameter]
         public string AWSRegion { get; set; }
 
         [RequiredParameter]
