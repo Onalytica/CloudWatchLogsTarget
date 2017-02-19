@@ -1,14 +1,13 @@
 {
   "version": "1.0.0-*",
-  "testRunner": "xunit",
+  "buildOptions": {
+    "emitEntryPoint": true,
+    "copyToOutput": "NLog.config"
+  },
 
   "dependencies": {
-    "NLog.Targets.CloudWatchLogs": {
-      "target": "project"
-    },
-    "Moq": "4.6.38-alpha",
-    "xunit": "2.2.0-beta5-build3474",
-    "dotnet-test-xunit": "2.2.0-preview2-build1029"
+    "NLog": "5.0.0-beta06",
+    "NLog.Targets.CloudWatchLogs": "1.2.0-beta" 
   },
 
   "frameworks": {
@@ -21,7 +20,7 @@
         }
       }
     },
-    "net451": {
+    "net45": {
     }
   }
 }

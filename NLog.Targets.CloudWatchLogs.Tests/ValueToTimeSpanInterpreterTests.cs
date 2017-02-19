@@ -1,13 +1,12 @@
 ﻿using System;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using NLog.Targets.CloudWatchLogs.Interval;
+using Xunit;
 
 namespace NLog.Targets.CloudWatchLogs.Tests
 {
-    [TestClass]
-    public class ValueToTimeSpanInterpreterTests
+     public class ValueToTimeSpanInterpreterTests
     {
-        [TestMethod]
+        [Fact]
         public void GetTimeSpan_Should_Return_3_Seconds()
         {
             // arrange
@@ -17,10 +16,10 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             var actual = target.GetTimeSpan(3);
 
             // assert
-            Assert.AreEqual(TimeSpan.FromSeconds(3), actual);
+            Assert.Equal(TimeSpan.FromSeconds(3), actual);
         }
 
-        [TestMethod]
+        [Fact]
         public void GetTimeSpan_Should_Return_10_Minutes()
         {
             // arrange
@@ -30,10 +29,10 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             var actual = target.GetTimeSpan(10);
 
             // assert
-            Assert.AreEqual(TimeSpan.FromMinutes(10), actual);
+            Assert.Equal(TimeSpan.FromMinutes(10), actual);
         }
 
-        [TestMethod]
+        [Fact]
         public void GetTimeSpan_Should_Return_1_Hour()
         {
             // arrange
@@ -43,7 +42,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             var actual = target.GetTimeSpan(1);
 
             // assert
-            Assert.AreEqual(TimeSpan.FromHours(1), actual);
+            Assert.Equal(TimeSpan.FromHours(1), actual);
         }
     }
 }

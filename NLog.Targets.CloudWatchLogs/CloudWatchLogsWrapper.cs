@@ -1,12 +1,10 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 using System.Collections.Generic;
 using Amazon.CloudWatchLogs;
 using Amazon.CloudWatchLogs.Model;
 using Polly;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
-using NLog.Targets.CloudWatchLogs.Interval;
 
 namespace NLog.Targets.CloudWatchLogs
 {
@@ -15,38 +13,30 @@ namespace NLog.Targets.CloudWatchLogs
     /// </summary>
     public sealed class CloudWatchLogsClientWrapper
     {
-        private IAmazonCloudWatchLogs _client;
-        private string _logGroupName;
-        private string _logStreamName;
-        private int _retries = 5;
+        private readonly IAmazonCloudWatchLogs _client;
+        private readonly CloudWatchLogsWrapperSettings _settings;
         private Task _currentTask = Task.FromResult(true);
-        private IIntervalProvider _sleepDurationProvider;
         private static ConcurrentDictionary<string, string> _tokens = new ConcurrentDictionary<string, string>();
 
         /// <summary>
         /// Constructs CloudWatchLogsClientWrapper object.
         /// </summary>
         /// <param name="client">Instance of IAmazonCloudWatchLogs.</param>
-        /// <param name="logGroupName">The log group name to be used.</param>
-        /// <param name="logStreamName">The log stream name within the group to be used.</param>
-        /// <param name="sleepDurationProvider">The sleep duration provider used for the retry policy.</param>
+        /// <param name="settings">The wrapper settings object.</param>
         public CloudWatchLogsClientWrapper(
-            IAmazonCloudWatchLogs client, 
-            string logGroupName, 
-            string logStreamName, 
-            IIntervalProvider sleepDurationProvider)
+            IAmazonCloudWatchLogs client,
+            CloudWatchLogsWrapperSettings settings
+        )
         {
             _client = client;
-            _logGroupName = logGroupName;
-            _logStreamName = logStreamName;
-            _sleepDurationProvider = sleepDurationProvider;
+            _settings = settings;
         }
 
         /// <summary>
         /// Gets token key for the current log group and stream.
         /// </summary>
         /// <returns>The token key string.</returns>
-        private string GetTokenKey() => $"{_logGroupName}:{_logStreamName}";
+        private string GetTokenKey() => $"{_settings.LogGroupName}:{_settings.LogStreamName}";
 
         /// <summary>
         /// Initializes the CloudWatch Logs group and stream and returns next sequence token.
@@ -57,22 +47,22 @@ namespace NLog.Targets.CloudWatchLogs
             return Policy
                 .Handle<AWSFailedRequestException>()
                 .Or<AmazonCloudWatchLogsException>()
-                .WaitAndRetryAsync(_retries, retryCount => _sleepDurationProvider.GetInterval(retryCount))
+                .WaitAndRetryAsync(_settings.Retries, retryCount => _settings.SleepDurationProvider.GetInterval(retryCount))
                 .ExecuteAsync(async () =>
                 {
                     string nextToken = null;
 
                     // We check if the log group exists and create if it doesn't.
-                    var logGroupsResponse = await _client.DescribeLogGroupsAsync(new DescribeLogGroupsRequest { LogGroupNamePrefix = _logGroupName });
-                    if (!logGroupsResponse.Verify(nameof(_client.DescribeLogGroupsAsync)).LogGroups.Any(lg => lg.LogGroupName == _logGroupName))
-                        (await _client.CreateLogGroupAsync(new CreateLogGroupRequest { LogGroupName = _logGroupName }))
+                    var logGroupsResponse = await _client.DescribeLogGroupsAsync(new DescribeLogGroupsRequest { LogGroupNamePrefix = _settings.LogGroupName });
+                    if (!logGroupsResponse.Verify(nameof(_client.DescribeLogGroupsAsync)).LogGroups.Any(lg => lg.LogGroupName == _settings.LogGroupName))
+                        (await _client.CreateLogGroupAsync(new CreateLogGroupRequest { LogGroupName = _settings.LogGroupName }))
                             .Verify(nameof(_client.CreateLogGroupAsync));
 
                     // We check if the log stream exsists within the log group and create if it doesn't or save the UploadSequenceToken if it does.
-                    var logStreamsResponse = await _client.DescribeLogStreamsAsync(new DescribeLogStreamsRequest { LogGroupName = _logGroupName, LogStreamNamePrefix = _logStreamName });
-                    var stream = logStreamsResponse.Verify(nameof(_client.DescribeLogStreamsAsync)).LogStreams.FirstOrDefault(ls => ls.LogStreamName == _logStreamName);
+                    var logStreamsResponse = await _client.DescribeLogStreamsAsync(new DescribeLogStreamsRequest { LogGroupName = _settings.LogGroupName, LogStreamNamePrefix = _settings.LogStreamName });
+                    var stream = logStreamsResponse.Verify(nameof(_client.DescribeLogStreamsAsync)).LogStreams.FirstOrDefault(ls => ls.LogStreamName == _settings.LogStreamName);
                     if (stream == null)
-                        (await _client.CreateLogStreamAsync(new CreateLogStreamRequest { LogStreamName = _logStreamName, LogGroupName = _logGroupName }))
+                        (await _client.CreateLogStreamAsync(new CreateLogStreamRequest { LogStreamName = _settings.LogStreamName, LogGroupName = _settings.LogGroupName }))
                             .Verify(nameof(_client.CreateLogStreamAsync));
                     else
                         nextToken = stream.UploadSequenceToken;
@@ -97,14 +87,14 @@ namespace NLog.Targets.CloudWatchLogs
                         return await Policy
                             .Handle<AWSFailedRequestException>()
                             .Or<AmazonCloudWatchLogsException>()
-                            .WaitAndRetryAsync(_retries, retryCount => _sleepDurationProvider.GetInterval(retryCount))
+                            .WaitAndRetryAsync(_settings.Retries, retryCount => _settings.SleepDurationProvider.GetInterval(retryCount))
                             .ExecuteAsync(async () =>
                             {
                                 var response = (await _client.PutLogEventsAsync(
                                     new PutLogEventsRequest
                                     {
-                                        LogGroupName = _logGroupName,
-                                        LogStreamName = _logStreamName,
+                                        LogGroupName = _settings.LogGroupName,
+                                        LogStreamName = _settings.LogStreamName,
                                         SequenceToken = _tokens.GetOrAdd(GetTokenKey(), Init),
                                         LogEvents = logEvents.OrderBy(e => e.Timestamp).ToList()
                                     })
