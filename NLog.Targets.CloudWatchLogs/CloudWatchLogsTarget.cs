@@ -15,14 +15,43 @@ namespace NLog.Targets.CloudWatchLogs
     {
         private Lazy<CloudWatchLogsClientWrapper> _client;
 
-        public CloudWatchLogsTarget()
+        //public CloudWatchLogsTarget()
+        //{
+        //    _client = new Lazy<CloudWatchLogsClientWrapper>(() => 
+        //        new CloudWatchLogsClientWrapper(
+        //            new AmazonCloudWatchLogsClient(AWSAccessKeyId, AWSSecretKey, RegionEndpoint.GetBySystemName(AWSRegion)),
+        //            LogGroupName,
+        //            LogStreamName,
+        //            new ExponentialInterval<Seconds>(2)));
+        //}
+
+        public CloudWatchLogsTarget(bool localCredentials = false)
         {
-            _client = new Lazy<CloudWatchLogsClientWrapper>(() => 
-                new CloudWatchLogsClientWrapper(
-                    new AmazonCloudWatchLogsClient(AWSAccessKeyId, AWSSecretKey, RegionEndpoint.GetBySystemName(AWSRegion)),
-                    LogGroupName,
-                    LogStreamName,
-                    new ExponentialInterval<Seconds>(2)));
+            if (localCredentials)
+                _client = new Lazy<CloudWatchLogsClientWrapper>(() =>
+                    new CloudWatchLogsClientWrapper(
+                        new AmazonCloudWatchLogsClient(AWSAccessKeyId, AWSSecretKey,
+                            RegionEndpoint.GetBySystemName(AWSRegion)),
+                        LogGroupName,
+                        LogStreamName,
+                        new ExponentialInterval<Seconds>(2)));
+            else
+            {
+                if (string.IsNullOrEmpty(AWSRegion))
+                    _client = new Lazy<CloudWatchLogsClientWrapper>(() =>
+                        new CloudWatchLogsClientWrapper(
+                            new AmazonCloudWatchLogsClient(),
+                            LogGroupName,
+                            LogStreamName,
+                            new ExponentialInterval<Seconds>(2)));
+                else
+                    _client = new Lazy<CloudWatchLogsClientWrapper>(() =>
+                        new CloudWatchLogsClientWrapper(
+                            new AmazonCloudWatchLogsClient(RegionEndpoint.GetBySystemName(AWSRegion)),
+                            LogGroupName,
+                            LogStreamName,
+                            new ExponentialInterval<Seconds>(2)));
+            }
         }
 
         [RequiredParameter]
