@@ -2,10 +2,10 @@
 using NLog.Config;
 using NLog.Common;
 using Amazon;
-using Amazon.Runtime;
 using Amazon.CloudWatchLogs;
 using Amazon.CloudWatchLogs.Model;
 using System.Linq;
+using NLog.Layouts;
 using NLog.Targets.CloudWatchLogs.Credentials;
 
 namespace NLog.Targets.CloudWatchLogs
@@ -20,45 +20,65 @@ namespace NLog.Targets.CloudWatchLogs
             _client = new Lazy<CloudWatchLogsClientWrapper>(() =>
                 new CloudWatchLogsClientWrapper(
                     new AmazonCloudWatchLogsClient(
-                        AWSCredentialsProvider.GetCredentialsOrDefault(AWSAccessKeyId, AWSSecretKey),
-                        RegionEndpoint.GetBySystemName(AWSRegion)
+                        AWSCredentialsProvider.GetCredentialsOrDefault(
+	                        this._awsAccessKeyIdRendered,
+	                        this._awsSecretKeyRendered),
+                        RegionEndpoint.GetBySystemName(this._awsRegionRendered)
                     ),
-                    new CloudWatchLogsWrapperSettings(LogGroupName, LogStreamName)
+                    new CloudWatchLogsWrapperSettings(
+	                    this._logGroupNameRendered,
+	                    this._logStreamNameRendered)
                 )
             );
         }
 
-        public string AWSAccessKeyId { get; set; }
+        private string _awsAccessKeyIdRendered => AWSAccessKeyId?.Render(LogEventInfo.CreateNullEvent()) ?? string.Empty;
+        private string _awsSecretKeyRendered => AWSSecretKey?.Render(LogEventInfo.CreateNullEvent()) ?? string.Empty;
+		private string _awsRegionRendered => AWSRegion?.Render(LogEventInfo.CreateNullEvent()) ?? "us-east-1";
 
-        public string AWSSecretKey { get; set; }
+		private string _logGroupNameRendered => LogGroupName?.Render(LogEventInfo.CreateNullEvent()) ?? string.Empty;
+		private string _logStreamNameRendered => LogStreamName?.Render(LogEventInfo.CreateNullEvent()) ?? string.Empty;
+
+		public SimpleLayout AWSAccessKeyId { get; set; }
+
+        public SimpleLayout AWSSecretKey { get; set; }
 
         [RequiredParameter]
-        public string AWSRegion { get; set; }
+        public SimpleLayout AWSRegion { get; set; }
 
         [RequiredParameter]
-        public string LogGroupName { get; set; }
+        public SimpleLayout LogGroupName { get; set; }
 
         [RequiredParameter]
-        public string LogStreamName { get; set; }
+        public SimpleLayout LogStreamName { get; set; }
 
         protected override void Write(LogEventInfo logEvent)
         {
             _client.Value
-                .WriteAsync(new[] { new InputLogEvent { Message = Layout.Render(logEvent), Timestamp = logEvent.TimeStamp } })
+                .WriteAsync(new[] { new InputLogEvent {
+		            Message = Layout.Render(logEvent),
+		            Timestamp = logEvent.TimeStamp
+	            } })
                 .Wait();
         }
 
         protected override void Write(AsyncLogEventInfo logEvent)
         {
             _client.Value
-                .WriteAsync(new[] { new InputLogEvent { Message = Layout.Render(logEvent.LogEvent), Timestamp = logEvent.LogEvent.TimeStamp } })
+                .WriteAsync(new[] { new InputLogEvent {
+		            Message = Layout.Render(logEvent.LogEvent),
+		            Timestamp = logEvent.LogEvent.TimeStamp
+	            } })
                 .Wait();
         }
 
         protected override void Write(AsyncLogEventInfo[] logEvents)
         {
             _client.Value
-                .WriteAsync(logEvents.Select(e => new InputLogEvent { Message = Layout.Render(e.LogEvent), Timestamp = e.LogEvent.TimeStamp }))
+                .WriteAsync(logEvents.Select(e => new InputLogEvent {
+		            Message = Layout.Render(e.LogEvent),
+		            Timestamp = e.LogEvent.TimeStamp
+	            }))
                 .Wait();
         }
     }
