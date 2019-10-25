@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Net;
 using NLog.Targets.CloudWatchLogs.Interval;
 using Xunit;
+using NLog.Targets.CloudWatchLogs.Model;
 
 namespace NLog.Targets.CloudWatchLogs.Tests
 {
@@ -55,16 +56,14 @@ namespace NLog.Targets.CloudWatchLogs.Tests
 
     public class CloudWatchLogsClientWrapperTests
     {
-        private const string _logGroup = "some-log-group", _logStream = "some-log-stream";
-
         private IIntervalProvider CreateIntervalProvider() =>
             Mock.Of<IIntervalProvider>(m => m.GetInterval(It.IsAny<int>()) == TimeSpan.Zero);
 
-        private IEnumerable<InputLogEvent> CreateEvents(int count = 3)
+        private IEnumerable<LogDatum> CreateEvents(int count = 3)
         {
             return Enumerable.Range(1, count)
                 .OrderByDescending(i => i)
-                .Select(i => new InputLogEvent
+                .Select(i => new LogDatum
                 {
                     Timestamp = DateTime.Now.AddSeconds(-i),
                     Message = i.ToString()
@@ -88,7 +87,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
 
             var target = new CloudWatchLogsClientWrapper(
                 clientMock.Object, 
-                new CloudWatchLogsWrapperSettings(_logGroup, _logStream, CreateIntervalProvider())
+                new CloudWatchLogsClientWrapperSettings(CreateIntervalProvider())
             );
 
             // act
@@ -113,7 +112,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
 
             var target = new CloudWatchLogsClientWrapper(
                 clientMock.Object,
-                new CloudWatchLogsWrapperSettings(_logGroup, _logStream, CreateIntervalProvider())
+                new CloudWatchLogsClientWrapperSettings(CreateIntervalProvider())
             );
 
             // act
@@ -135,7 +134,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
 
             var target = new CloudWatchLogsClientWrapper(
                 clientMock.Object,
-                new CloudWatchLogsWrapperSettings(_logGroup, _logStream, CreateIntervalProvider())
+                new CloudWatchLogsClientWrapperSettings(CreateIntervalProvider())
             );
 
             // act
@@ -178,12 +177,12 @@ namespace NLog.Targets.CloudWatchLogs.Tests
 
             var target = new CloudWatchLogsClientWrapper(
                 clientMock.Object,
-                new CloudWatchLogsWrapperSettings(_logGroup, _logStream, CreateIntervalProvider())
+                new CloudWatchLogsClientWrapperSettings(CreateIntervalProvider())
             );
 
             // act
             await Task.WhenAll(expectedSequence
-                .Select(i => target.WriteAsync(new[] { new InputLogEvent { Message = i.ToString() } }))
+                .Select(i => target.WriteAsync(new[] { new LogDatum { Message = i.ToString() } }))
                 .ToArray());
 
             // assert
@@ -196,7 +195,6 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         {
             // arrange
             int actualRetries = 0, expectedRetries = 3;
-            string logGroup = Guid.NewGuid().ToString(), logStream = Guid.NewGuid().ToString();
             var clientMock = new Mock<IAmazonCloudWatchLogs>().InitCreateGroup().InitStream();
             clientMock
                 .Setup(m => m.DescribeLogGroupsAsync(It.IsAny<DescribeLogGroupsRequest>(), It.IsAny<CancellationToken>()))
@@ -215,7 +213,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
 
             var target = new CloudWatchLogsClientWrapper(
                 clientMock.Object,
-                new CloudWatchLogsWrapperSettings(logGroup, logStream, CreateIntervalProvider())
+                new CloudWatchLogsClientWrapperSettings(CreateIntervalProvider())
             );
 
             // act
@@ -230,7 +228,6 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         {
             // arrange
             int actualRetries = 0, expectedRetries = 3;
-            string logGroup = Guid.NewGuid().ToString(), logStream = Guid.NewGuid().ToString();
             var clientMock = new Mock<IAmazonCloudWatchLogs>().InitStream();
             clientMock
                 .Setup(m => m.DescribeLogGroupsAsync(It.IsAny<DescribeLogGroupsRequest>(), It.IsAny<CancellationToken>()))
@@ -251,7 +248,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
 
             var target = new CloudWatchLogsClientWrapper(
                 clientMock.Object,
-                new CloudWatchLogsWrapperSettings(logGroup, logStream, CreateIntervalProvider())
+                new CloudWatchLogsClientWrapperSettings(CreateIntervalProvider())
             );
 
             // act
@@ -266,12 +263,12 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         {
             // arange
             var clientMock = new Mock<IAmazonCloudWatchLogs>().Init();
-            var events = new[]
+            var data = new[]
             {
-                new InputLogEvent { Timestamp = DateTime.UtcNow },
-                new InputLogEvent { Timestamp = DateTime.UtcNow.AddSeconds(-1) }
+                new LogDatum { Timestamp = DateTime.UtcNow },
+                new LogDatum { Timestamp = DateTime.UtcNow.AddSeconds(-1) }
             };
-            List<InputLogEvent> actual = null, expected = events.OrderBy(e => e.Timestamp).ToList();
+            List<InputLogEvent> actual = null, expected = data.Select(d => d.ToInputLogEvent()).OrderBy(e => e.Timestamp).ToList();
 
             clientMock
                .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
@@ -283,11 +280,11 @@ namespace NLog.Targets.CloudWatchLogs.Tests
 
             var target = new CloudWatchLogsClientWrapper(
                 clientMock.Object,
-                new CloudWatchLogsWrapperSettings(_logGroup, _logStream, CreateIntervalProvider())
+                new CloudWatchLogsClientWrapperSettings(CreateIntervalProvider())
             );
 
             // act
-            await target.WriteAsync(events);
+            await target.WriteAsync(data);
 
             // assert
             Assert.True(expected.SequenceEqual(actual), "Actual events sequence should be ordered chronologically.");
@@ -297,7 +294,6 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         public async Task WriteAsync_Should_Handle_Concurent_Requests_From_Multiple_Target_Insances()
         {
             // arange
-            string logGroup = Guid.NewGuid().ToString(), logStream = Guid.NewGuid().ToString();
             var clientMock = new Mock<IAmazonCloudWatchLogs>().InitGroup().InitCreateStream();
             var tokens = new List<int>();
 
@@ -328,15 +324,15 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             var intervalProvider = CreateIntervalProvider();
             var target1 = new CloudWatchLogsClientWrapper(
                 clientMock.Object,
-                new CloudWatchLogsWrapperSettings(logGroup, logStream, intervalProvider)
+                new CloudWatchLogsClientWrapperSettings(intervalProvider)
             );
             var target2 = new CloudWatchLogsClientWrapper(
                 clientMock.Object,
-                new CloudWatchLogsWrapperSettings(logGroup, logStream, intervalProvider)
+                new CloudWatchLogsClientWrapperSettings(intervalProvider)
             );
             var target3 = new CloudWatchLogsClientWrapper(
                 clientMock.Object,
-                new CloudWatchLogsWrapperSettings(logGroup, logStream, intervalProvider)
+                new CloudWatchLogsClientWrapperSettings(intervalProvider)
             );
 
             // act
@@ -357,7 +353,6 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         public async Task WriteAsync_Should_Reinit_Sequence_Token_If_All_Retries_Fail()
         {
             // arrange
-            string logGroup = Guid.NewGuid().ToString(), logStream = Guid.NewGuid().ToString();
             var clientMock = new Mock<IAmazonCloudWatchLogs>().InitGroup().InitCreateStream();
             int token = 1;
             string successfullToken = null;
@@ -385,7 +380,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
 
             var target = new CloudWatchLogsClientWrapper(
                 clientMock.Object,
-                new CloudWatchLogsWrapperSettings(logGroup, logStream, CreateIntervalProvider())
+                new CloudWatchLogsClientWrapperSettings(CreateIntervalProvider())
             );
 
             // act
