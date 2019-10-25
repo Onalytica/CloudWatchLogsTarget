@@ -397,5 +397,33 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             // assert
             Assert.Equal("2", successfullToken);
         }
+
+        [Fact]
+        public async Task WriteAsync_Should_Receive_Group_And_Stream_Names()
+        {
+            // arange
+            var clientMock = new Mock<IAmazonCloudWatchLogs>().Init();
+            var data = CreateEvents(Guid(), Guid(), 1);
+            string actual = null, expected = data.Select(d => $"{d.GroupName}:{d.StreamName}").Single();
+
+            clientMock
+               .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
+               .Returns<PutLogEventsRequest, CancellationToken>((r, c) =>
+               {
+                   actual = $"{r.LogGroupName}:{r.LogStreamName}";
+                   return Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.OK });
+               });
+
+            var target = new CloudWatchLogsClientWrapper(
+                clientMock.Object,
+                new CloudWatchLogsClientWrapperSettings(CreateIntervalProvider())
+            );
+
+            // act
+            await target.WriteAsync(data);
+
+            // assert
+            Assert.Equal(expected, actual);
+        }
     }
 }

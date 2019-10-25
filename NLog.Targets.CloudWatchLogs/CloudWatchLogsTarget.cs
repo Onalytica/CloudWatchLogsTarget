@@ -42,15 +42,27 @@ namespace NLog.Targets.CloudWatchLogs
         [RequiredParameter]
         public string LogStreamName { get; set; } = "unspecified";
 
+        /// <summary>
+        /// Function to generate LogGroupName on a per-message basis.
+        /// </summary>
+        public Func<string> LogGroupNameFunc { get; set; }
+
+        /// <summary>
+        /// Function to generate LogStreamName on a per-message basis.
+        /// </summary>
+        public Func<string> LogStreamNameFunc { get; set; }
+
         protected virtual LogDatum CreateDatum(LogEventInfo logEvent)
         {
-            return new LogDatum()
+            var result = new LogDatum()
             {
                 Message = Layout.Render(logEvent),
-                GroupName = LogGroupName,
-                StreamName = LogStreamName,
+                GroupName = LogGroupNameFunc?.Invoke() ?? LogGroupName,
+                StreamName = LogStreamNameFunc?.Invoke() ?? LogStreamName,
                 Timestamp = logEvent.TimeStamp
             };
+
+            return result;
         }
 
         protected override void Write(LogEventInfo logEvent)
