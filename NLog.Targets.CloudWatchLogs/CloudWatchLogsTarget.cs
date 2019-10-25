@@ -67,6 +67,7 @@ namespace NLog.Targets.CloudWatchLogs
                 .Wait();
         }
 
+        [Obsolete]
         protected override void Write(AsyncLogEventInfo[] logEvents)
         {
             _client.Value
