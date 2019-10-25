@@ -43,22 +43,23 @@ namespace NLog.Targets.CloudWatchLogs
         public string LogStreamName { get; set; } = "unspecified";
 
         /// <summary>
-        /// Function to generate LogGroupName on a per-message basis.
+        /// Function to generate LogGroupName, based on the rendered message.
         /// </summary>
-        public Func<string> LogGroupNameFunc { get; set; }
+        public Func<string, string> LogGroupNameFunc { get; set; }
 
         /// <summary>
-        /// Function to generate LogStreamName on a per-message basis.
+        /// Function to generate LogStreamName, based on the rendered message.
         /// </summary>
-        public Func<string> LogStreamNameFunc { get; set; }
+        public Func<string, string> LogStreamNameFunc { get; set; }
 
         protected virtual LogDatum CreateDatum(LogEventInfo logEvent)
         {
+            var renderedMessage = Layout.Render(logEvent);
             var result = new LogDatum()
             {
-                Message = Layout.Render(logEvent),
-                GroupName = LogGroupNameFunc?.Invoke() ?? LogGroupName,
-                StreamName = LogStreamNameFunc?.Invoke() ?? LogStreamName,
+                Message = renderedMessage,
+                GroupName = LogGroupNameFunc?.Invoke(renderedMessage) ?? LogGroupName,
+                StreamName = LogStreamNameFunc?.Invoke(renderedMessage) ?? LogStreamName,
                 Timestamp = logEvent.TimeStamp
             };
 

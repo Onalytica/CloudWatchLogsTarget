@@ -33,29 +33,29 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         [Fact]
         public void Group_Name_Func_Should_Override_Default()
         {
-            var expectedGroupName = Guid.NewGuid().ToString();
+            _logEventInfo.Message = Guid.NewGuid().ToString();
             var target = new CrackedTarget()
             {
-                LogGroupNameFunc = () => expectedGroupName
+                LogGroupNameFunc = m => m
             };
 
             var datum = target.CreateDatum(_logEventInfo);
 
-            Assert.Equal(datum.GroupName, expectedGroupName);
+            Assert.Equal(datum.GroupName, datum.Message);
         }
 
         [Fact]
         public void Stream_Name_Func_Should_Override_Default()
         {
-            var expectedStreamName = Guid.NewGuid().ToString();
+            _logEventInfo.Message = Guid.NewGuid().ToString();
             var target = new CrackedTarget()
             {
-                LogStreamNameFunc = () => expectedStreamName
+                LogStreamNameFunc = m => m
             };
 
             var datum = target.CreateDatum(_logEventInfo);
 
-            Assert.Equal(datum.StreamName, expectedStreamName);
+            Assert.Equal(datum.StreamName, datum.Message);
         }
     }
 }
