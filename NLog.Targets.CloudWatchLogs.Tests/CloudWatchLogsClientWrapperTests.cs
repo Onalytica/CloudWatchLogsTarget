@@ -59,16 +59,22 @@ namespace NLog.Targets.CloudWatchLogs.Tests
         private IIntervalProvider CreateIntervalProvider() =>
             Mock.Of<IIntervalProvider>(m => m.GetInterval(It.IsAny<int>()) == TimeSpan.Zero);
 
-        private IEnumerable<LogDatum> CreateEvents(int count = 3)
+        private IEnumerable<LogDatum> CreateEvents(string groupName, string streamName, int count = 3)
         {
             return Enumerable.Range(1, count)
                 .OrderByDescending(i => i)
                 .Select(i => new LogDatum
                 {
                     Timestamp = DateTime.Now.AddSeconds(-i),
-                    Message = i.ToString()
+                    Message = i.ToString(),
+                    GroupName = groupName,
+                    StreamName = streamName
                 });
         }
+
+        private IEnumerable<LogDatum> CreateEvents(int count = 3) => CreateEvents("unspecified", "unspecified", count);
+
+        private static string Guid() => System.Guid.NewGuid().ToString();
 
 
         [Fact]
@@ -217,7 +223,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             );
 
             // act
-            await target.WriteAsync(CreateEvents());
+            await target.WriteAsync(CreateEvents(Guid(), Guid()));
 
             // assert
             Assert.Equal(expectedRetries, actualRetries);
@@ -252,7 +258,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             );
 
             // act
-            await target.WriteAsync(CreateEvents());
+            await target.WriteAsync(CreateEvents(Guid(), Guid()));
 
             // assert
             Assert.Equal(expectedRetries, actualRetries);
@@ -268,13 +274,13 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                 new LogDatum { Timestamp = DateTime.UtcNow },
                 new LogDatum { Timestamp = DateTime.UtcNow.AddSeconds(-1) }
             };
-            List<InputLogEvent> actual = null, expected = data.Select(d => d.ToInputLogEvent()).OrderBy(e => e.Timestamp).ToList();
+            List<DateTime> actual = null, expected = data.Select(d => d.Timestamp.Value).OrderBy(t => t).ToList();
 
             clientMock
                .Setup(m => m.PutLogEventsAsync(It.IsAny<PutLogEventsRequest>(), It.IsAny<CancellationToken>()))
                .Returns<PutLogEventsRequest, CancellationToken>((r,c) =>
                {
-                   actual = r.LogEvents;
+                   actual = r.LogEvents.Select(e => e.Timestamp).ToList();
                    return Task.FromResult(new PutLogEventsResponse { HttpStatusCode = HttpStatusCode.OK });
                });
 
@@ -296,6 +302,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             // arange
             var clientMock = new Mock<IAmazonCloudWatchLogs>().InitGroup().InitCreateStream();
             var tokens = new List<int>();
+            string groupName = Guid(), streamName = Guid();
 
             clientMock
                 .Setup(m => m.DescribeLogStreamsAsync(It.IsAny<DescribeLogStreamsRequest>(), It.IsAny<CancellationToken>()))
@@ -338,9 +345,9 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             // act
             await Task.WhenAll(new []
             {
-                target1.WriteAsync(CreateEvents()),
-                target2.WriteAsync(CreateEvents()),
-                target3.WriteAsync(CreateEvents())
+                target1.WriteAsync(CreateEvents(groupName, streamName)),
+                target2.WriteAsync(CreateEvents(groupName, streamName)),
+                target3.WriteAsync(CreateEvents(groupName, streamName))
             });
 
             // assert
@@ -384,7 +391,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             );
 
             // act
-            await Assert.ThrowsAsync<InvalidSequenceTokenException>(() => target.WriteAsync(CreateEvents())); // first time should fail.
+            await Assert.ThrowsAsync<InvalidSequenceTokenException>(() => target.WriteAsync(CreateEvents(Guid(), Guid()))); // first time should fail.
             await target.WriteAsync(CreateEvents()); // second time should be successful.
 
             // assert

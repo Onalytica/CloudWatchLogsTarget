@@ -108,14 +108,15 @@ namespace NLog.Targets.CloudWatchLogs
                                 .WaitAndRetryAsync(_settings.Retries, retryCount => _settings.SleepDurationProvider.GetInterval(retryCount))
                                 .ExecuteAsync(async () =>
                                 {
-                                    var response = (await _client.PutLogEventsAsync(
-                                        new PutLogEventsRequest
-                                        {
-                                            LogGroupName = group.Key.GroupName,
-                                            LogStreamName = group.Key.StreamName,
-                                            SequenceToken = _tokens.GetOrAdd(tokenKey, Init),
-                                            LogEvents = group.Select(d => d.ToInputLogEvent()).OrderBy(e => e.Timestamp).ToList()
-                                        })
+                                    var request = new PutLogEventsRequest
+                                    {
+                                        LogGroupName = group.Key.GroupName,
+                                        LogStreamName = group.Key.StreamName,
+                                        SequenceToken = _tokens.GetOrAdd(tokenKey, Init),
+                                        LogEvents = group.Select(d => d.ToInputLogEvent()).OrderBy(e => e.Timestamp).ToList()
+                                    };
+
+                                    var response = (await _client.PutLogEventsAsync(request)                                        
                                         .ConfigureAwait(false))
                                         .Verify(nameof(_client.PutLogEventsAsync));
                                     _tokens.AddOrUpdate(tokenKey, response.NextSequenceToken, (k, ov) => response.NextSequenceToken);
