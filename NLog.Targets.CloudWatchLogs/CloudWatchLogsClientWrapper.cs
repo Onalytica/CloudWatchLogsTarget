@@ -6,6 +6,7 @@ using Polly;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using NLog.Targets.CloudWatchLogs.Model;
+using System;
 
 namespace NLog.Targets.CloudWatchLogs
 {
@@ -33,15 +34,29 @@ namespace NLog.Targets.CloudWatchLogs
             _settings = settings;
         }
 
+        private struct KeyBits
+        {
+            public string LogGroupName { get; set; }
+            public string LogStreamName { get; set; }
+
+            public static KeyBits Parse(string key)
+            {
+                var bits = key.Split(':');
+                return new KeyBits()
+                {
+                    LogGroupName = bits[0],
+                    LogStreamName = bits[1]
+                };
+            }
+        }
+
         /// <summary>
         /// Initializes the CloudWatch Logs group and stream and returns next sequence token.
         /// </summary>
         /// <returns>Next sequence token.</returns>
         private string Init(string key)
         {
-            int colon = key.IndexOf(':');
-            var logGroupName = key.Substring(0, colon);
-            var logStreamName = key.Substring(colon + 1);
+            var keyBits = KeyBits.Parse(key);
 
             return Policy
                 .Handle<AWSFailedRequestException>()
@@ -53,14 +68,14 @@ namespace NLog.Targets.CloudWatchLogs
 
                     // We check if the log group exists and create if it doesn't.
                     var logGroupsResponse = await _client.DescribeLogGroupsAsync(
-                        new DescribeLogGroupsRequest { LogGroupNamePrefix = logGroupName }
+                        new DescribeLogGroupsRequest { LogGroupNamePrefix = keyBits.LogGroupName }
                     ).ConfigureAwait(false);
 
                     if (!logGroupsResponse.Verify(nameof(_client.DescribeLogGroupsAsync))
-                            .LogGroups.Any(lg => lg.LogGroupName == logGroupName))
+                            .LogGroups.Any(lg => lg.LogGroupName == keyBits.LogGroupName))
                     {
                         var resp = await _client.CreateLogGroupAsync(
-                            new CreateLogGroupRequest { LogGroupName = logGroupName }
+                            new CreateLogGroupRequest { LogGroupName = keyBits.LogGroupName }
                         ).ConfigureAwait(false);
                         resp.Verify(nameof(_client.CreateLogGroupAsync));
                     }
@@ -68,15 +83,15 @@ namespace NLog.Targets.CloudWatchLogs
                     // We check if the log stream exsists within the log group and create if it doesn't 
                     // or save the UploadSequenceToken if it does.
                     var logStreamsResponse = await _client.DescribeLogStreamsAsync(
-                        new DescribeLogStreamsRequest { LogGroupName = logGroupName, LogStreamNamePrefix = logStreamName }
+                        new DescribeLogStreamsRequest(keyBits.LogGroupName) { LogStreamNamePrefix = keyBits.LogStreamName }
                     ).ConfigureAwait(false);
 
                     var stream = logStreamsResponse.Verify(nameof(_client.DescribeLogStreamsAsync))
-                            .LogStreams.FirstOrDefault(ls => ls.LogStreamName == logStreamName);
+                            .LogStreams.FirstOrDefault(ls => ls.LogStreamName == keyBits.LogStreamName);
                     if (stream == null)
                     {
                         var resp = await _client.CreateLogStreamAsync(
-                            new CreateLogStreamRequest { LogStreamName = logStreamName, LogGroupName = logGroupName }
+                            new CreateLogStreamRequest(keyBits.LogGroupName, keyBits.LogStreamName)
                         ).ConfigureAwait(false);
                         resp.Verify(nameof(_client.CreateLogStreamAsync));
                     }
@@ -95,15 +110,13 @@ namespace NLog.Targets.CloudWatchLogs
         /// <returns>The write task.</returns>
         public Task WriteAsync(IEnumerable<LogDatum> logData)
         {
-            var groupedData = logData.GroupBy(d => new { d.GroupName, d.StreamName }).ToList();
+            var groupedData = logData.GroupBy(d => d.TokenKey).ToList();
 
             foreach (var group in groupedData)
             {
                 _currentTask = _currentTask
                     .ContinueWith(async prevt =>
                     {
-                        var tokenKey = $"{group.Key.GroupName}:{group.Key.StreamName}";
-
                         try
                         {
                             await Policy
@@ -112,11 +125,12 @@ namespace NLog.Targets.CloudWatchLogs
                                 .WaitAndRetryAsync(_settings.Retries, retryCount => _settings.SleepDurationProvider.GetInterval(retryCount))
                                 .ExecuteAsync(async () =>
                                 {
+                                    var keyBits = KeyBits.Parse(group.Key);
                                     var request = new PutLogEventsRequest
                                     {
-                                        LogGroupName = group.Key.GroupName,
-                                        LogStreamName = group.Key.StreamName,
-                                        SequenceToken = _tokens.GetOrAdd(tokenKey, Init),
+                                        LogGroupName = keyBits.LogGroupName,
+                                        LogStreamName = keyBits.LogStreamName,
+                                        SequenceToken = _tokens.GetOrAdd(group.Key, Init),
                                         LogEvents = group.Select(d => d.ToInputLogEvent()).OrderBy(e => e.Timestamp).ToList()
                                     };
 
@@ -124,12 +138,12 @@ namespace NLog.Targets.CloudWatchLogs
                                         .ConfigureAwait(false))
                                         .Verify(nameof(_client.PutLogEventsAsync));
 
-                                    _tokens.AddOrUpdate(tokenKey, response.NextSequenceToken, (k, ov) => response.NextSequenceToken);
+                                    _tokens.AddOrUpdate(group.Key, response.NextSequenceToken, (k, ov) => response.NextSequenceToken);
                                 }).ConfigureAwait(false);
                         }
                         catch (InvalidSequenceTokenException)
                         {
-                            _tokens.TryRemove(tokenKey, out var _);
+                            _tokens.TryRemove(group.Key, out var _);
                             throw;
                         }
                     })
