@@ -7,11 +7,12 @@ using Amazon.CloudWatchLogs;
 using Amazon.CloudWatchLogs.Model;
 using System.Linq;
 using NLog.Targets.CloudWatchLogs.Credentials;
+using NLog.Targets.CloudWatchLogs.Model;
 
 namespace NLog.Targets.CloudWatchLogs
 {
     [Target("CloudWatchLogs")]
-    public sealed class CloudWatchLogsTarget : TargetWithLayout
+    public class CloudWatchLogsTarget : TargetWithLayout
     {
         private readonly Lazy<CloudWatchLogsClientWrapper> _client;
 
@@ -23,7 +24,7 @@ namespace NLog.Targets.CloudWatchLogs
                         AWSCredentialsProvider.GetCredentialsOrDefault(AWSAccessKeyId, AWSSecretKey),
                         RegionEndpoint.GetBySystemName(AWSRegion)
                     ),
-                    new CloudWatchLogsWrapperSettings(LogGroupName, LogStreamName)
+                    new CloudWatchLogsClientWrapperSettings()
                 )
             );
         }
@@ -36,29 +37,54 @@ namespace NLog.Targets.CloudWatchLogs
         public string AWSRegion { get; set; }
 
         [RequiredParameter]
-        public string LogGroupName { get; set; }
+        public string LogGroupName { get; set; } = "unspecified";
 
         [RequiredParameter]
-        public string LogStreamName { get; set; }
+        public string LogStreamName { get; set; } = "unspecified";
+
+        /// <summary>
+        /// Function to generate LogGroupName, based on the rendered message.
+        /// </summary>
+        public Func<string, string> LogGroupNameFactory { get; set; }
+
+        /// <summary>
+        /// Function to generate LogStreamName, based on the rendered message.
+        /// </summary>
+        public Func<string, string> LogStreamNameFactory { get; set; }
+
+        protected virtual LogDatum CreateDatum(LogEventInfo logEvent)
+        {
+            var renderedMessage = Layout.Render(logEvent);
+            var result = new LogDatum()
+            {
+                Message = renderedMessage,
+                GroupName = LogGroupNameFactory?.Invoke(renderedMessage) ?? LogGroupName,
+                StreamName = LogStreamNameFactory?.Invoke(renderedMessage) ?? LogStreamName,
+                Timestamp = logEvent.TimeStamp
+            };
+
+            return result;
+        }
 
         protected override void Write(LogEventInfo logEvent)
         {
             _client.Value
-                .WriteAsync(new[] { new InputLogEvent { Message = Layout.Render(logEvent), Timestamp = logEvent.TimeStamp } })
+                .WriteAsync(new[] { CreateDatum(logEvent) })
                 .Wait();
         }
 
         protected override void Write(AsyncLogEventInfo logEvent)
         {
             _client.Value
-                .WriteAsync(new[] { new InputLogEvent { Message = Layout.Render(logEvent.LogEvent), Timestamp = logEvent.LogEvent.TimeStamp } })
+                .WriteAsync(new[] { CreateDatum(logEvent.LogEvent) })
                 .Wait();
         }
 
+        [Obsolete]
         protected override void Write(AsyncLogEventInfo[] logEvents)
         {
             _client.Value
-                .WriteAsync(logEvents.Select(e => new InputLogEvent { Message = Layout.Render(e.LogEvent), Timestamp = e.LogEvent.TimeStamp }))
+                .WriteAsync(logEvents.Select(e => CreateDatum(e.LogEvent)))
                 .Wait();
         }
     }
