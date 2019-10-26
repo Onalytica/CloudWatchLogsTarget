@@ -36,7 +36,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             _logEventInfo.Message = Guid.NewGuid().ToString();
             var target = new CrackedTarget()
             {
-                LogGroupNameFunc = m => m
+                LogGroupNameFactory = m => m
             };
 
             var datum = target.CreateDatum(_logEventInfo);
@@ -50,7 +50,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             _logEventInfo.Message = Guid.NewGuid().ToString();
             var target = new CrackedTarget()
             {
-                LogStreamNameFunc = m => m
+                LogStreamNameFactory = m => m
             };
 
             var datum = target.CreateDatum(_logEventInfo);

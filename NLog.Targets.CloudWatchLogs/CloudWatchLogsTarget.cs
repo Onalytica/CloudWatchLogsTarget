@@ -45,12 +45,12 @@ namespace NLog.Targets.CloudWatchLogs
         /// <summary>
         /// Function to generate LogGroupName, based on the rendered message.
         /// </summary>
-        public Func<string, string> LogGroupNameFunc { get; set; }
+        public Func<string, string> LogGroupNameFactory { get; set; }
 
         /// <summary>
         /// Function to generate LogStreamName, based on the rendered message.
         /// </summary>
-        public Func<string, string> LogStreamNameFunc { get; set; }
+        public Func<string, string> LogStreamNameFactory { get; set; }
 
         protected virtual LogDatum CreateDatum(LogEventInfo logEvent)
         {
@@ -58,8 +58,8 @@ namespace NLog.Targets.CloudWatchLogs
             var result = new LogDatum()
             {
                 Message = renderedMessage,
-                GroupName = LogGroupNameFunc?.Invoke(renderedMessage) ?? LogGroupName,
-                StreamName = LogStreamNameFunc?.Invoke(renderedMessage) ?? LogStreamName,
+                GroupName = LogGroupNameFactory?.Invoke(renderedMessage) ?? LogGroupName,
+                StreamName = LogStreamNameFactory?.Invoke(renderedMessage) ?? LogStreamName,
                 Timestamp = logEvent.TimeStamp
             };
 
