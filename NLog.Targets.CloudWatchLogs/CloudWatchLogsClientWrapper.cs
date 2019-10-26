@@ -54,11 +54,14 @@ namespace NLog.Targets.CloudWatchLogs
                     // We check if the log group exists and create if it doesn't.
                     var logGroupsResponse = await _client.DescribeLogGroupsAsync(
                         new DescribeLogGroupsRequest { LogGroupNamePrefix = logGroupName }
-                    );
+                    ).ConfigureAwait(false);
+
                     if (!logGroupsResponse.Verify(nameof(_client.DescribeLogGroupsAsync))
                             .LogGroups.Any(lg => lg.LogGroupName == logGroupName))
                     {
-                        var resp = await _client.CreateLogGroupAsync(new CreateLogGroupRequest { LogGroupName = logGroupName });
+                        var resp = await _client.CreateLogGroupAsync(
+                            new CreateLogGroupRequest { LogGroupName = logGroupName }
+                        ).ConfigureAwait(false);
                         resp.Verify(nameof(_client.CreateLogGroupAsync));
                     }
 
@@ -66,14 +69,15 @@ namespace NLog.Targets.CloudWatchLogs
                     // or save the UploadSequenceToken if it does.
                     var logStreamsResponse = await _client.DescribeLogStreamsAsync(
                         new DescribeLogStreamsRequest { LogGroupName = logGroupName, LogStreamNamePrefix = logStreamName }
-                    );
+                    ).ConfigureAwait(false);
+
                     var stream = logStreamsResponse.Verify(nameof(_client.DescribeLogStreamsAsync))
                             .LogStreams.FirstOrDefault(ls => ls.LogStreamName == logStreamName);
                     if (stream == null)
                     {
                         var resp = await _client.CreateLogStreamAsync(
                             new CreateLogStreamRequest { LogStreamName = logStreamName, LogGroupName = logGroupName }
-                        );
+                        ).ConfigureAwait(false);
                         resp.Verify(nameof(_client.CreateLogStreamAsync));
                     }
                     else
@@ -81,7 +85,7 @@ namespace NLog.Targets.CloudWatchLogs
 
                     return nextToken;
                 })
-                .Result;
+                .GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -95,11 +99,11 @@ namespace NLog.Targets.CloudWatchLogs
 
             foreach (var group in groupedData)
             {
-                var tokenKey = $"{group.Key.GroupName}:{group.Key.StreamName}";
-
                 _currentTask = _currentTask
                     .ContinueWith(async prevt =>
                     {
+                        var tokenKey = $"{group.Key.GroupName}:{group.Key.StreamName}";
+
                         try
                         {
                             await Policy
@@ -119,8 +123,9 @@ namespace NLog.Targets.CloudWatchLogs
                                     var response = (await _client.PutLogEventsAsync(request)                                        
                                         .ConfigureAwait(false))
                                         .Verify(nameof(_client.PutLogEventsAsync));
+
                                     _tokens.AddOrUpdate(tokenKey, response.NextSequenceToken, (k, ov) => response.NextSequenceToken);
-                                });
+                                }).ConfigureAwait(false);
                         }
                         catch (InvalidSequenceTokenException)
                         {
