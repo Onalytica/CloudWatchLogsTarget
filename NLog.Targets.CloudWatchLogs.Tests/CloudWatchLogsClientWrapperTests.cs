@@ -363,6 +363,7 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             var clientMock = new Mock<IAmazonCloudWatchLogs>().InitGroup().InitCreateStream();
             int token = 1;
             string successfullToken = null;
+            string guid = Guid();
 
             clientMock
                 .Setup(m => m.DescribeLogStreamsAsync(It.IsAny<DescribeLogStreamsRequest>(), It.IsAny<CancellationToken>()))
@@ -370,7 +371,9 @@ namespace NLog.Targets.CloudWatchLogs.Tests
                     new DescribeLogStreamsResponse
                     {
                         HttpStatusCode = HttpStatusCode.OK,
-                        LogStreams = new List<LogStream> { new LogStream { LogStreamName = r.LogStreamNamePrefix, UploadSequenceToken = token++.ToString() } }
+                        LogStreams = new List<LogStream> { new LogStream { 
+                            LogStreamName = r.LogStreamNamePrefix, UploadSequenceToken = token++.ToString() 
+                        } }
                     }
                 ));
 
@@ -391,8 +394,8 @@ namespace NLog.Targets.CloudWatchLogs.Tests
             );
 
             // act
-            await Assert.ThrowsAsync<InvalidSequenceTokenException>(() => target.WriteAsync(CreateEvents(Guid(), Guid()))); // first time should fail.
-            await target.WriteAsync(CreateEvents()); // second time should be successful.
+            await Assert.ThrowsAsync<InvalidSequenceTokenException>(() => target.WriteAsync(CreateEvents(guid, guid))); // first time should fail.
+            await target.WriteAsync(CreateEvents(guid, guid)); // second time should be successful.
 
             // assert
             Assert.Equal("2", successfullToken);

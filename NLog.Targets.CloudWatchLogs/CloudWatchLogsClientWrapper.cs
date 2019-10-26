@@ -102,7 +102,7 @@ namespace NLog.Targets.CloudWatchLogs
                     {
                         try
                         {
-                            return await Policy
+                            await Policy
                                 .Handle<AWSFailedRequestException>()
                                 .Or<AmazonCloudWatchLogsException>()
                                 .WaitAndRetryAsync(_settings.Retries, retryCount => _settings.SleepDurationProvider.GetInterval(retryCount))
@@ -120,8 +120,7 @@ namespace NLog.Targets.CloudWatchLogs
                                         .ConfigureAwait(false))
                                         .Verify(nameof(_client.PutLogEventsAsync));
                                     _tokens.AddOrUpdate(tokenKey, response.NextSequenceToken, (k, ov) => response.NextSequenceToken);
-                                    return response;
-                                }, false);
+                                });
                         }
                         catch (InvalidSequenceTokenException)
                         {

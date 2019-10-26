@@ -1,15 +1,17 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <Description>NLog target for Amazon CloudWatch Logs.</Description>
     <VersionPrefix>1.2.0-beta</VersionPrefix>
-    <Authors>nanestev</Authors>
-    <TargetFrameworks>netstandard1.3;net45</TargetFrameworks>
+    <Authors>nanestev;Onalytica</Authors>
+    <TargetFrameworks>netstandard2.0;net45</TargetFrameworks>
     <AssemblyName>NLog.Targets.CloudWatchLogs</AssemblyName>
+    <PackageVersion>1.3.0</PackageVersion>
     <PackageId>NLog.Targets.CloudWatchLogs</PackageId>
     <PackageTags>NLog;AWS CloudWatch Logs</PackageTags>
-    <PackageProjectUrl>https://github.com/Onalytica/CloudWatchLogsTarget</PackageProjectUrl>
-    <NetStandardImplicitPackageVersion Condition=" '$(TargetFramework)' == 'netstandard1.3' ">1.6.0</NetStandardImplicitPackageVersion>
+    <RepositoryUrl>https://github.com/Onalytica/CloudWatchLogsTarget</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
@@ -23,16 +25,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.CloudWatchLogs" Version="3.3.1.1" />
-    <PackageReference Include="Polly" Version="5.0.3" />
+    <PackageReference Include="AWSSDK.CloudWatchLogs" Version="3.3.101" />
+    <PackageReference Include="NLog" Version="4.6.7" />
+    <PackageReference Include="Polly" Version="7.1.1" />
   </ItemGroup>
 
-  <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard1.3' ">
-    <PackageReference Include="NLog" Version="4.6.3" />
-  </ItemGroup>
+  
 
-  <ItemGroup Condition=" '$(TargetFramework)' == 'net45' ">
-    <PackageReference Include="NLog" Version="4.4.1" />
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net45' ">    
     <Reference Include="System" />
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
